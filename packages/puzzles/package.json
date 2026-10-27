@@ -1,0 +1,20 @@
+{
+  "name": "@bookbot/puzzles",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "scripts": {
+    "test": "vitest",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@bookbot/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "eslint": "^9",
+    "typescript": "^5",
+    "vitest": "^2.0.0"
+  }
+}

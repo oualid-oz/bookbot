@@ -1,0 +1,17 @@
+{
+  "extends": "../../base-tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@bookbot/db": ["../../packages/db"],
+      "@bookbot/core": ["../../packages/core"],
+      "@bookbot/puzzles": ["../../packages/puzzles"],
+      "@bookbot/shared": ["../../packages/shared"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules", "dist", ".wxt"]
+}

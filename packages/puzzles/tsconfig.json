@@ -1,0 +1,12 @@
+{
+  "extends": "../../base-tsconfig.json",
+  "compilerOptions": {
+    "declaration": true,
+    "outDir": "./dist",
+    "paths": {
+      "@bookbot/core": ["../../packages/core"]
+    }
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "extension",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "wxt build",
+    "start": "wxt dev",
+    "lint": "eslint",
+    "clean": "rm -rf .wxt dist"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "typescript": "^5",
+    "wxt": "^0.18.0"
+  }
+}

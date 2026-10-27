@@ -1,0 +1,23 @@
+{
+  "extends": "../../base-tsconfig.json",
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "jsx": "preserve",
+    "module": "esnext",
+    "noEmit": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@bookbot/db": ["../../packages/db"],
+      "@bookbot/core": ["../../packages/core"],
+      "@bookbot/puzzles": ["../../packages/puzzles"],
+      "@bookbot/shared": ["../../packages/shared"]
+    }
+  },
+  "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

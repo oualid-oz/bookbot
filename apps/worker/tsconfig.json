@@ -1,0 +1,16 @@
+{
+  "extends": "../../base-tsconfig.json",
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "paths": {
+      "@bookbot/db": ["../../packages/db"],
+      "@bookbot/core": ["../../packages/core"],
+      "@bookbot/puzzles": ["../../packages/puzzles"],
+      "@bookbot/shared": ["../../packages/shared"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

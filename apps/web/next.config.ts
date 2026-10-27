@@ -15,6 +15,7 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  transpilePackages: ['@bookbot/db', '@bookbot/core', '@bookbot/puzzles', '@bookbot/shared'],
 };
 
 export default nextConfig;
