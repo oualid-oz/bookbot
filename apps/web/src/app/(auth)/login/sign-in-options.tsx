@@ -100,7 +100,12 @@ function PasswordForm({ providerId }: { providerId: string }) {
             value={email} onChange={(e) => setEmail(e.target.value)} />
         </Field>
         <Field>
-          <FieldLabel htmlFor="password">Password</FieldLabel>
+          <div className="flex items-center">
+            <FieldLabel htmlFor="password">Password</FieldLabel>
+            <Link href="/forgot-password" className="ml-auto text-sm underline-offset-4 hover:underline">
+              Forgot password?
+            </Link>
+          </div>
           <Input id="password" type="password" required autoComplete="current-password"
             value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>

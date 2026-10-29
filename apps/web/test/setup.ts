@@ -5,6 +5,7 @@ import { testDatabaseUrl, testRedisUrl } from './test-env';
 process.env.DATABASE_URL = testDatabaseUrl();
 process.env.REDIS_URL = testRedisUrl();
 process.env.NEXTAUTH_URL = 'http://localhost:3000';
+process.env.EMAIL_TRANSPORT = 'memory';
 process.env.STRIPE_SECRET_KEY = 'sk_test_dummy_for_tests';
 process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_secret';
 process.env.STRIPE_PRICE_ID_PRO = 'price_test_pro';

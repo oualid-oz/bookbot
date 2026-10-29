@@ -1,36 +1,34 @@
-document.addEventListener('DOMContentLoaded', () => {
-  const apiTokenInput = document.getElementById('apiToken') as HTMLInputElement;
-  const saveButton = document.getElementById('saveToken') as HTMLButtonElement;
-  const statusDiv = document.getElementById('status') as HTMLDivElement;
+import type { Request, Response } from '../../lib/messages';
 
-  // Load saved token
-  chrome.storage.local.get(['apiToken'], (result) => {
-    if (result.apiToken) {
-      apiTokenInput.value = result.apiToken;
-    }
-  });
+const tokenInput = document.getElementById('apiToken') as HTMLInputElement;
+const saveButton = document.getElementById('saveToken') as HTMLButtonElement;
+const statusDiv = document.getElementById('status') as HTMLDivElement;
 
-  // Save token
-  saveButton.addEventListener('click', () => {
-    const token = apiTokenInput.value.trim();
-    
-    if (!token) {
-      showStatus('Please enter an API token', 'error');
-      return;
-    }
+function showStatus(message: string, type: 'success' | 'error') {
+  statusDiv.textContent = message;
+  statusDiv.className = `status ${type}`;
+  statusDiv.style.display = 'block';
+}
 
-    chrome.storage.local.set({ apiToken: token }, () => {
-      showStatus('Token saved successfully!', 'success');
-    });
-  });
+async function testConnection() {
+  const response: Response<{ org: string; user: string }> = await browser.runtime.sendMessage({ type: 'whoami' } satisfies Request);
+  if (response.ok) showStatus(`Connected to ${response.data.org} as ${response.data.user}`, 'success');
+  else showStatus(response.error, 'error');
+}
 
-  function showStatus(message: string, type: 'success' | 'error') {
-    statusDiv.textContent = message;
-    statusDiv.className = `status ${type}`;
-    statusDiv.style.display = 'block';
-    
-    setTimeout(() => {
-      statusDiv.style.display = 'none';
-    }, 3000);
+browser.storage.local.get('apiToken').then(({ apiToken }) => {
+  if (apiToken) {
+    tokenInput.value = apiToken;
+    testConnection();
   }
+});
+
+saveButton.addEventListener('click', async () => {
+  const token = tokenInput.value.trim();
+  if (!token) {
+    showStatus('Please enter an API token', 'error');
+    return;
+  }
+  await browser.storage.local.set({ apiToken: token });
+  await testConnection();
 });

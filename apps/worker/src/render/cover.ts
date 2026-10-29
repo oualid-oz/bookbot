@@ -1,12 +1,31 @@
-import { PDFDocument, PDFFont, StandardFonts, degrees, rgb } from 'pdf-lib';
+import {
+  PDFDocument,
+  PDFFont,
+  StandardFonts,
+  clip,
+  degrees,
+  endPath,
+  popGraphicsState,
+  pushGraphicsState,
+  rectangle,
+  rgb,
+  type PDFImage,
+} from 'pdf-lib';
 import { LINE_HEIGHT, layoutCover, type CoverLayoutInput } from '@bookbot/core';
 import { fitFontSize, inches, safeText } from './text';
+
+export interface CoverImageFile {
+  bytes: Uint8Array;
+  mimeType: string;
+}
 
 /**
  * Render a full wrap-around paperback cover from the same layout the editor
  * previews, at KDP's exact size including bleed.
+ *
+ * @param imageFiles - Bytes for each image asset in the layout, by asset ID
  */
-export async function renderCover(input: CoverLayoutInput): Promise<Uint8Array> {
+export async function renderCover(input: CoverLayoutInput, imageFiles: Record<string, CoverImageFile> = {}): Promise<Uint8Array> {
   const layout = layoutCover(input);
   const doc = await PDFDocument.create();
   doc.setTitle(`${input.title || 'Untitled'} (cover)`);
@@ -19,8 +38,28 @@ export async function renderCover(input: CoverLayoutInput): Promise<Uint8Array> 
   const pageHeight = inches(layout.height);
   const page = doc.addPage([inches(layout.width), pageHeight]);
 
+  const embedded = new Map<string, PDFImage>();
+  for (const [assetId, file] of Object.entries(imageFiles)) {
+    embedded.set(assetId, file.mimeType === 'image/png' ? await doc.embedPng(file.bytes) : await doc.embedJpg(file.bytes));
+  }
+
   for (const el of layout.elements) {
-    if (el.kind === 'rect') {
+    if (el.kind === 'image') {
+      const image = embedded.get(el.assetId);
+      if (!image) continue;
+      // Scale the whole image, offset it so the crop lands on the box, and clip
+      const scale = el.width / el.crop.width; // inches per image pixel
+      const drawnHeight = image.height * scale;
+      const boxBottom = pageHeight - inches(el.y + el.height);
+      page.pushOperators(pushGraphicsState(), rectangle(inches(el.x), boxBottom, inches(el.width), inches(el.height)), clip(), endPath());
+      page.drawImage(image, {
+        x: inches(el.x - el.crop.x * scale),
+        y: pageHeight - inches(el.y - el.crop.y * scale + drawnHeight),
+        width: inches(image.width * scale),
+        height: inches(drawnHeight),
+      });
+      page.pushOperators(popGraphicsState());
+    } else if (el.kind === 'rect') {
       // PDF origin is bottom-left; layout origin is top-left
       page.drawRectangle({
         x: inches(el.x),

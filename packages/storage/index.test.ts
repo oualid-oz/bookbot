@@ -23,4 +23,15 @@ describe('createLocalStorage', async () => {
     await expect(storage.put('../outside.pdf', new Uint8Array(), 'application/pdf')).rejects.toThrow('Invalid storage key');
     await expect(storage.get('exports/../../outside.pdf')).rejects.toThrow('Invalid storage key');
   });
+
+  it('should delete objects, ignoring missing ones', async () => {
+    await storage.put('assets/a.png', new Uint8Array([1]), 'image/png');
+    await storage.delete('assets/a.png');
+    expect(await storage.get('assets/a.png')).toBeNull();
+    await expect(storage.delete('assets/a.png')).resolves.toBeUndefined();
+  });
+
+  it('should not presign uploads (they go through the API)', async () => {
+    expect(await storage.presignPut('assets/a.png', 'image/png', 10)).toBeNull();
+  });
 });

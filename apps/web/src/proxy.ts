@@ -2,7 +2,7 @@ import { withAuth } from 'next-auth/middleware';
 
 // Every page is private unless listed here. Pages in app/(app) are protected
 // automatically; new public pages belong in app/(marketing) or app/(auth).
-const PUBLIC_PATHS = ['/', '/pricing', '/login', '/signup'];
+const PUBLIC_PATHS = ['/', '/pricing', '/login', '/signup', '/forgot-password', '/reset-password', '/verify-email'];
 
 export default withAuth({
   pages: {

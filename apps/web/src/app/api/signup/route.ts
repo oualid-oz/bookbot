@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { signupSchema } from '@bookbot/shared';
 import { hashPassword } from '@/lib/password';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { sendVerificationEmail } from '@/server/account-emails';
 import { createPasswordUser } from '@/server/users';
 
 export async function POST(req: NextRequest) {
@@ -32,6 +33,9 @@ export async function POST(req: NextRequest) {
       { status: 409 }
     );
   }
+
+  // The account works without verifying; a failed email mustn't fail sign-up
+  await sendVerificationEmail(email).catch((err) => console.error('Could not send verification email:', err));
 
   return NextResponse.json({ id: user.id, email }, { status: 201 });
 }

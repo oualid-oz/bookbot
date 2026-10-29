@@ -22,6 +22,20 @@
       "when": 1793305679196,
       "tag": "0002_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793308443282,
+      "tag": "0003_asset_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793309046779,
+      "tag": "0004_extension_tokens",
+      "breakpoints": true
     }
   ]
 }

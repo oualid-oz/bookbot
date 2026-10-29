@@ -46,8 +46,8 @@ jobs:
 
       - run: npm ci
 
-      - name: Lint (web)
-        run: npm run lint -w web
+      - name: Lint
+        run: npm run lint
 
       - name: Unit and integration tests
         run: npm test

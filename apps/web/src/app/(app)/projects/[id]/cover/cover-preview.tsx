@@ -1,6 +1,7 @@
 'use client';
 
-import { Layer, Line, Rect, Stage, Text } from 'react-konva';
+import { useEffect, useState } from 'react';
+import { Image as KonvaImage, Layer, Line, Rect, Stage, Text } from 'react-konva';
 import { LINE_HEIGHT, type CoverLayout } from '@bookbot/core';
 
 const FONT_FAMILY = 'Helvetica, Arial, sans-serif';
@@ -9,8 +10,18 @@ const FONT_FAMILY = 'Helvetica, Arial, sans-serif';
  * Draws a cover layout. Coordinates are inches, scaled to pixels; font sizes
  * are points, so divide by 72 to get inches.
  */
-export default function CoverPreview({ layout, pxPerInch }: { layout: CoverLayout; pxPerInch: number }) {
+export default function CoverPreview({
+  layout,
+  pxPerInch,
+  imageUrls,
+}: {
+  layout: CoverLayout;
+  pxPerInch: number;
+  /** Asset ID -> URL for the layout's image elements */
+  imageUrls: Record<string, string>;
+}) {
   const { guides } = layout;
+  const images = useLoadedImages(imageUrls);
   const guide = { stroke: '#22d3ee', strokeWidth: 1 / pxPerInch, dash: [0.06, 0.06], listening: false };
 
   return (
@@ -19,6 +30,12 @@ export default function CoverPreview({ layout, pxPerInch }: { layout: CoverLayou
         {layout.elements.map((el, i) => {
           if (el.kind === 'rect') {
             return <Rect key={i} x={el.x} y={el.y} width={el.width} height={el.height} fill={el.color} />;
+          }
+          if (el.kind === 'image') {
+            const image = images[el.assetId];
+            return image ? (
+              <KonvaImage key={i} image={image} x={el.x} y={el.y} width={el.width} height={el.height} crop={el.crop} />
+            ) : null;
           }
           if (el.kind === 'text') {
             return (
@@ -46,4 +63,25 @@ export default function CoverPreview({ layout, pxPerInch }: { layout: CoverLayou
       </Layer>
     </Stage>
   );
+}
+
+/** Load images by URL, keyed by asset ID; each appears once it has loaded */
+function useLoadedImages(urls: Record<string, string>) {
+  const [loaded, setLoaded] = useState<Record<string, HTMLImageElement>>({});
+  const key = JSON.stringify(urls);
+
+  useEffect(() => {
+    let active = true;
+    for (const [id, url] of Object.entries(urls)) {
+      const image = new window.Image();
+      image.onload = () => active && setLoaded((current) => ({ ...current, [id]: image }));
+      image.src = url;
+    }
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` captures the URLs
+  }, [key]);
+
+  return loaded;
 }

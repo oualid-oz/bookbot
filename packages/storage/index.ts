@@ -1,6 +1,7 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { GetObjectCommand, NoSuchKey, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, NoSuchKey, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 /**
  * Object storage used by the web app and the worker.
@@ -18,6 +19,13 @@ export interface Storage {
   put(key: string, body: Uint8Array, contentType: string): Promise<void>;
   /** Returns null when the object doesn't exist */
   get(key: string): Promise<Uint8Array | null>;
+  /** No error if the object doesn't exist */
+  delete(key: string): Promise<void>;
+  /**
+   * A URL the browser can PUT exactly `contentLength` bytes of `contentType`
+   * to, or null when the driver can't presign (upload through the API instead)
+   */
+  presignPut(key: string, contentType: string, contentLength: number, expiresInSeconds?: number): Promise<string | null>;
 }
 
 export function createLocalStorage(rootDir: string): Storage {
@@ -45,6 +53,12 @@ export function createLocalStorage(rootDir: string): Storage {
         if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
         throw err;
       }
+    },
+    async delete(key) {
+      await rm(resolveKey(key), { force: true });
+    },
+    async presignPut() {
+      return null;
     },
   };
 }
@@ -79,6 +93,14 @@ export function createS3Storage(config: S3StorageConfig): Storage {
         if (err instanceof NoSuchKey) return null;
         throw err;
       }
+    },
+    async delete(key) {
+      await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }));
+    },
+    async presignPut(key, contentType, contentLength, expiresInSeconds = 600) {
+      // Type and length are signed, so the upload must match what was declared
+      const command = new PutObjectCommand({ Bucket: config.bucket, Key: key, ContentType: contentType, ContentLength: contentLength });
+      return getSignedUrl(client, command, { expiresIn: expiresInSeconds });
     },
   };
 }

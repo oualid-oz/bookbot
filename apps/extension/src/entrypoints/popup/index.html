@@ -39,6 +39,11 @@
     button:hover {
       background: #4338ca;
     }
+    .hint {
+      font-size: 11px;
+      color: #666;
+      margin: 8px 0 0;
+    }
     .status {
       margin-top: 12px;
       padding: 8px;
@@ -63,7 +68,8 @@
     <input type="text" id="apiToken" placeholder="Enter your API token" />
   </div>
   
-  <button id="saveToken">Save Token</button>
+  <button id="saveToken">Save and test connection</button>
+  <p class="hint">Create a token in Bookbot under Settings → Extension.</p>
   
   <div id="status" class="status" style="display: none;"></div>
   

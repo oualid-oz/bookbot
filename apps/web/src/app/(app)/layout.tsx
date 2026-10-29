@@ -1,5 +1,8 @@
 import { Suspense } from 'react';
+import { eq } from 'drizzle-orm';
+import { db, users } from '@bookbot/db';
 import { getCurrentUser } from '@/lib/auth';
+import { VerifyEmailBanner } from '@/components/verify-email-banner';
 import { AppBreadcrumb, AppBreadcrumbTrail } from '@/components/app-breadcrumb';
 import { AppSidebar } from '@/components/app-sidebar';
 import { ModeToggle } from '@/components/mode-toggle';
@@ -31,6 +34,9 @@ export default function AppLayout({ children }: LayoutProps<'/'>) {
           <ModeToggle />
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          <Suspense fallback={null}>
+            <EmailVerificationNotice />
+          </Suspense>
           {/* Pages on dynamic routes read their params at request time */}
           <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
         </div>
@@ -46,6 +52,14 @@ function PageSkeleton() {
       <Skeleton className="h-64 rounded-xl" />
     </div>
   );
+}
+
+/** Banner for users who haven't verified their email yet */
+async function EmailVerificationNotice() {
+  const user = await getCurrentUser();
+  if (!user?.id) return null;
+  const [row] = await db.select({ email: users.email, emailVerified: users.emailVerified }).from(users).where(eq(users.id, user.id));
+  return row && !row.emailVerified ? <VerifyEmailBanner email={row.email} /> : null;
 }
 
 async function SidebarUser() {

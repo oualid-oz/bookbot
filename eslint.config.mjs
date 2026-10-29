@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generated build output (WXT extension, tsc)
+    "**/.output/**",
+    "**/.wxt/**",
+    "**/dist/**",
   ]),
 ]);
 

@@ -3,20 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "wxt build",
+    "build": "wxt prepare && tsc --noEmit && wxt build",
     "start": "wxt dev",
     "lint": "eslint",
-    "clean": "rm -rf .wxt dist"
+    "clean": "rm -rf .wxt dist",
+    "test": "vitest run",
+    "typecheck": "wxt prepare && tsc --noEmit"
   },
-  "dependencies": {
-    "react": "19.3.0",
-    "react-dom": "19.3.0"
-  },
+  "dependencies": {},
   "devDependencies": {
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/chrome": "^0.0.280",
     "eslint": "^9",
     "typescript": "^5",
+    "vitest": "^2.0.0",
     "wxt": "^0.18.0"
   }
 }

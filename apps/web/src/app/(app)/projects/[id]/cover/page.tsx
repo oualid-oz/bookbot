@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { apiFetch } from '@/lib/api-client';
 import type { ProjectSummary } from '@/components/project-options';
+import { ImageField, type UploadedImage } from './image-field';
 
 // Konva requires the browser canvas, so skip server rendering
 const CoverPreview = dynamic(() => import('./cover-preview'), {
@@ -29,6 +30,7 @@ export default function CoverEditorPage() {
   const { id } = useParams<{ id: string }>();
   const [project, setProject] = useState<ProjectSummary | null>(null);
   const [design, setDesign] = useState<CoverDesign | null>(null);
+  const [images, setImages] = useState<Record<string, UploadedImage>>({});
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [error, setError] = useState('');
   const [previewWidth, setPreviewWidth] = useState(0);
@@ -39,11 +41,12 @@ export default function CoverEditorPage() {
   useEffect(() => {
     Promise.all([
       apiFetch<{ project: ProjectSummary }>(`/api/projects/${id}`),
-      apiFetch<{ design: CoverDesign }>(`/api/projects/${id}/cover`),
+      apiFetch<{ design: CoverDesign; images: UploadedImage[] }>(`/api/projects/${id}/cover`),
     ])
       .then(([p, c]) => {
         setProject(p.project);
         setDesign(c.design);
+        setImages(Object.fromEntries(c.images.map((image) => [image.id, image])));
       })
       .catch((err) => setError(err.message));
   }, [id]);
@@ -87,10 +90,33 @@ export default function CoverEditorPage() {
     }, SAVE_DELAY_MS);
   };
 
-  const layout = useMemo(
-    () => (project && design ? layoutCover({ ...design, trimSize: project.trimSize, pageCount: project.pageCount, paper: project.paper }) : null),
-    [project, design]
-  );
+  const layout = useMemo(() => {
+    if (!project || !design) return null;
+    const image = (assetId: string | null) => {
+      const found = assetId ? images[assetId] : undefined;
+      return found ? { assetId: found.id, width: found.width, height: found.height } : null;
+    };
+    return layoutCover({
+      ...design,
+      trimSize: project.trimSize,
+      pageCount: project.pageCount,
+      paper: project.paper,
+      frontImage: image(design.frontImageId),
+      backImage: image(design.backImageId),
+    });
+  }, [project, design, images]);
+
+  const imageUrls = useMemo(() => Object.fromEntries(Object.values(images).map((image) => [image.id, image.url])), [images]);
+
+  const panelDpi = (panel: 'front' | 'back') => {
+    const el = layout?.elements.find((e) => e.kind === 'image' && e.panel === panel);
+    return el?.kind === 'image' ? el.effectiveDpi : null;
+  };
+
+  const setImage = (field: 'frontImageId' | 'backImageId', image: UploadedImage | null) => {
+    if (image) setImages((current) => ({ ...current, [image.id]: image }));
+    update(field, image?.id ?? null);
+  };
 
   if (error) return <p className="mx-auto w-full max-w-6xl text-sm text-destructive">{error}</p>;
 
@@ -137,6 +163,13 @@ export default function CoverEditorPage() {
                   <Textarea id="c-back" rows={5} value={design.backText} onChange={(e) => update('backText', e.target.value)} />
                 </Field>
 
+                <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">Images</FieldSeparator>
+
+                <ImageField id="c-front-image" label="Front cover image" image={design.frontImageId ? images[design.frontImageId] ?? null : null}
+                  effectiveDpi={panelDpi('front')} onChange={(image) => setImage('frontImageId', image)} />
+                <ImageField id="c-back-image" label="Back cover image" image={design.backImageId ? images[design.backImageId] ?? null : null}
+                  effectiveDpi={panelDpi('back')} onChange={(image) => setImage('backImageId', image)} />
+
                 <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">Style</FieldSeparator>
 
                 <div className="grid grid-cols-3 gap-3">
@@ -163,7 +196,7 @@ export default function CoverEditorPage() {
           <CardContent>
             <div ref={previewRef} className="overflow-hidden rounded-lg border">
               {layout && previewWidth > 0 ? (
-                <CoverPreview layout={layout} pxPerInch={previewWidth / layout.width} />
+                <CoverPreview layout={layout} pxPerInch={previewWidth / layout.width} imageUrls={imageUrls} />
               ) : (
                 <Skeleton className="aspect-[4/3] w-full" />
               )}

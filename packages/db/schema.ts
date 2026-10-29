@@ -266,6 +266,9 @@ export const assets = pgTable('assets', {
   orgId: uuid('orgId').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   r2Key: varchar('r2_key', { length: 500 }).notNull(),
   kind: varchar('kind', { length: 50, enum: ['image', 'font', 'other'] }).notNull(),
+  // pending until the uploaded bytes are verified
+  status: varchar('status', { length: 20, enum: ['pending', 'ready'] }).notNull().default('pending'),
+  name: varchar('name', { length: 255 }),
   width: integer('width'),
   height: integer('height'),
   dpi: integer('dpi'),
@@ -392,6 +395,22 @@ export const listingsRelations = relations(listings, ({ one }) => ({
   }),
 }));
 
+// Extension API tokens: only a SHA-256 hash is stored; the token itself is
+// shown once when created
+export const extensionTokens = pgTable('extension_tokens', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  orgId: uuid('orgId').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  userId: uuid('userId').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 100 }).notNull(),
+  tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  orgIdx: index('extension_tokens_org_idx').on(table.orgId),
+}));
+
 // Update schema export
 export const schema = {
   users,
@@ -413,4 +432,5 @@ export const schema = {
   puzzleSets,
   aiGenerations,
   listings,
+  extensionTokens,
 };

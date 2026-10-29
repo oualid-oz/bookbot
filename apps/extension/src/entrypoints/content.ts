@@ -1,141 +1,116 @@
+import type { Estimate, Request, Response } from '../lib/messages';
+import {
+  asinFromUrl,
+  marketplaceForHost,
+  parseBestSellersRank,
+  parsePrice,
+  parseReviewCount,
+  type Marketplace,
+} from '../lib/parse';
+
+const PANEL_CLASS = 'bookbot-spy-panel';
+
 export default defineContentScript({
-  matches: ['*://*.amazon.com/*', '*://*.amazon.co.uk/*', '*://*.amazon.de/*'],
+  matches: [
+    '*://*.amazon.com/*',
+    '*://*.amazon.co.uk/*',
+    '*://*.amazon.de/*',
+    '*://*.amazon.fr/*',
+    '*://*.amazon.es/*',
+    '*://*.amazon.it/*',
+    '*://*.amazon.co.jp/*',
+  ],
   main() {
-    console.log('Bookbot KDP Spy loaded');
-    
-    // Inject overlay for BSR data
-    injectBSROverlay();
+    const marketplace = marketplaceForHost(location.hostname);
+    if (!marketplace) return;
+
+    const asin = asinFromUrl(location.href);
+    if (asin) {
+      showProductPanel(asin, marketplace);
+    } else {
+      // Search results load and re-render dynamically
+      annotateSearchResults();
+      new MutationObserver(annotateSearchResults).observe(document.body, { childList: true, subtree: true });
+    }
   },
 });
 
-function injectBSROverlay() {
-  // Look for product cards on Amazon search results
-  const observer = new MutationObserver(() => {
-    const productCards = document.querySelectorAll('[data-component-type="s-search-result"]');
-    
-    productCards.forEach((card) => {
-      if (card.querySelector('.bookbot-spy-overlay')) return;
-      
-      const asin = card.getAttribute('data-asin');
-      if (!asin) return;
-      
-      // Extract BSR from the page (this is simplified)
-      const bsrElement = card.querySelector('[data-csa-c-content-id="best-seller-rank"]');
-      const bsr = extractBSR(bsrElement);
-      
-      // Extract price
-      const priceElement = card.querySelector('.a-price .a-offscreen');
-      const price = priceElement?.textContent || '';
-      
-      // Extract reviews
-      const reviewsElement = card.querySelector('[aria-label*="reviews"]');
-      const reviews = extractReviews(reviewsElement);
-      
-      // Create overlay
-      const overlay = document.createElement('div');
-      overlay.className = 'bookbot-spy-overlay';
-      overlay.style.cssText = `
-        background: #f0f0f0;
-        padding: 8px;
-        margin-top: 8px;
-        border-radius: 4px;
-        font-size: 12px;
-      `;
-      
-      overlay.innerHTML = `
-        <div style="font-weight: bold; margin-bottom: 4px;">Bookbot Spy</div>
-        <div>BSR: ${bsr || 'N/A'}</div>
-        <div>Price: ${price}</div>
-        <div>Reviews: ${reviews}</div>
-        <button id="analyze-${asin}" style="margin-top: 4px; padding: 4px 8px; cursor: pointer;">
-          Analyze
-        </button>
-        <div id="result-${asin}" style="margin-top: 4px; font-size: 11px;"></div>
-      `;
-      
-      card.appendChild(overlay);
-      
-      // Add click handler
-      const button = overlay.querySelector(`#analyze-${asin}`);
-      button?.addEventListener('click', () => analyzeProduct(asin, bsr, price, reviews));
-    });
-  });
-  
-  observer.observe(document.body, { childList: true, subtree: true });
+function text(selector: string, root: ParentNode = document): string {
+  return root.querySelector(selector)?.textContent?.trim() ?? '';
 }
 
-async function analyzeProduct(asin: string, bsr: string, price: string, reviews: string) {
-  const resultDiv = document.getElementById(`result-${asin}`);
-  if (!resultDiv) return;
-  
-  resultDiv.textContent = 'Analyzing...';
-  
-  try {
-    // Get API token from storage
-    const { apiToken } = await chrome.storage.local.get(['apiToken']);
-    if (!apiToken) {
-      resultDiv.textContent = 'Error: No API token. Set it in the extension popup.';
-      resultDiv.style.color = 'red';
-      return;
+/** Product pages have the BSR, so they get the full estimate */
+function showProductPanel(asin: string, marketplace: Marketplace) {
+  const anchor = document.querySelector('#title, #productTitle')?.closest('div');
+  if (!anchor || document.querySelector(`.${PANEL_CLASS}`)) return;
+
+  const details = text('#detailBulletsWrapper_feature_div') || text('#productDetails_detailBullets_sections1') || text('#SalesRank');
+  const rank = parseBestSellersRank(details.replace(/\s+/g, ' '));
+  const price = parsePrice(text('#corePrice_feature_div .a-offscreen') || text('.a-price .a-offscreen'));
+  const reviews = parseReviewCount(text('#acrCustomerReviewText'));
+
+  const panel = createPanel();
+  addRow(panel, 'BSR', rank ? `#${rank.rank.toLocaleString()} in ${rank.category}` : 'Not found');
+  addRow(panel, 'Price', price !== null ? price.toFixed(2) : '—');
+  addRow(panel, 'Reviews', reviews !== null ? reviews.toLocaleString() : '—');
+  anchor.after(panel);
+
+  if (!rank) return;
+  const result = addRow(panel, 'Sales', 'Estimating…');
+  const message: Request = {
+    type: 'estimate',
+    payload: { asin, bsr: rank.rank, category: rank.category, marketplace, price: price ?? undefined, reviews: reviews ?? undefined },
+  };
+  browser.runtime.sendMessage(message).then((response: Response<Estimate>) => {
+    if (response.ok) {
+      result.textContent = `~${response.data.estimatedDailySales.toLocaleString()}/day · ~${response.data.estimatedMonthlySales.toLocaleString()}/month`;
+    } else {
+      result.textContent = response.error;
+      result.style.color = '#b91c1c';
     }
-    
-    // Call API
-    const response = await fetch('http://localhost:3000/api/ext/estimate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiToken}`,
-      },
-      body: JSON.stringify({
-        asin,
-        bsr: parseInt(bsr.replace(/,/g, '')) || 0,
-        price: parseFloat(price.replace(/[$,]/g, '')) || 0,
-        reviews: parseInt(reviews.replace(/,/g, '')) || 0,
-        category: 'Books',
-        marketplace: getMarketplace(),
-      }),
-    });
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      resultDiv.textContent = `Error: ${data.error}`;
-      resultDiv.style.color = 'red';
-      return;
-    }
-    
-    resultDiv.innerHTML = `
-      <div>Daily Sales: ~${data.estimatedDailySales}</div>
-      <div>Monthly Sales: ~${data.estimatedMonthlySales}</div>
-    `;
-    resultDiv.style.color = 'green';
-  } catch (err) {
-    resultDiv.textContent = 'Error: Failed to connect to API';
-    resultDiv.style.color = 'red';
+  });
+}
+
+/** Search cards don't include the BSR; show what they do have */
+function annotateSearchResults() {
+  for (const card of document.querySelectorAll<HTMLElement>('[data-component-type="s-search-result"][data-asin]')) {
+    if (!card.dataset.asin || card.querySelector(`.${PANEL_CLASS}`)) continue;
+
+    const price = parsePrice(text('.a-price .a-offscreen', card));
+    const reviews = parseReviewCount(text('[aria-label$="ratings"], [aria-label*="ratings"] span, .s-underline-text', card));
+
+    const panel = createPanel();
+    addRow(panel, 'Price', price !== null ? price.toFixed(2) : '—');
+    addRow(panel, 'Reviews', reviews !== null ? reviews.toLocaleString() : '—');
+    const hint = document.createElement('div');
+    hint.textContent = 'Open the book for its BSR and sales estimate';
+    hint.style.cssText = 'margin-top:4px;color:#6b7280';
+    panel.append(hint);
+    card.append(panel);
   }
 }
 
-function getMarketplace(): string {
-  const hostname = window.location.hostname;
-  if (hostname.includes('amazon.co.uk')) return 'UK';
-  if (hostname.includes('amazon.de')) return 'DE';
-  if (hostname.includes('amazon.fr')) return 'FR';
-  if (hostname.includes('amazon.es')) return 'ES';
-  if (hostname.includes('amazon.it')) return 'IT';
-  if (hostname.includes('amazon.co.jp')) return 'JP';
-  return 'US';
+// Built with textContent only: page data is never interpreted as HTML
+function createPanel(): HTMLElement {
+  const panel = document.createElement('div');
+  panel.className = PANEL_CLASS;
+  panel.style.cssText =
+    'margin:8px 0;padding:8px 10px;border:1px solid #e5e7eb;border-radius:6px;background:#f9fafb;font:12px/1.5 system-ui,sans-serif;color:#111827';
+  const title = document.createElement('div');
+  title.textContent = 'Bookbot';
+  title.style.cssText = 'font-weight:600;margin-bottom:2px';
+  panel.append(title);
+  return panel;
 }
 
-function extractBSR(element: Element | null): string {
-  if (!element) return '';
-  const text = element.textContent || '';
-  const match = text.match(/#([0-9,]+)/);
-  return match ? match[1] : '';
-}
-
-function extractReviews(element: Element | null): string {
-  if (!element) return '0';
-  const text = element.textContent || '';
-  const match = text.match(/([0-9,]+)/);
-  return match ? match[1] : '0';
+function addRow(panel: HTMLElement, label: string, value: string): HTMLElement {
+  const row = document.createElement('div');
+  const name = document.createElement('span');
+  name.textContent = `${label}: `;
+  name.style.color = '#6b7280';
+  const content = document.createElement('span');
+  content.textContent = value;
+  row.append(name, content);
+  panel.append(row);
+  return content;
 }

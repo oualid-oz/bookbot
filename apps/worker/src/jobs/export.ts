@@ -1,10 +1,10 @@
 import { Worker, Job } from 'bullmq';
 import Redis from 'ioredis';
-import { and, asc, eq } from 'drizzle-orm';
-import { db, exports, listings, projectDocs, projects, puzzleSets } from '@bookbot/db';
+import { and, asc, eq, inArray } from 'drizzle-orm';
+import { assets, db, exports, listings, projectDocs, projects, puzzleSets } from '@bookbot/db';
 import { EXPORT_QUEUE, coverDesignSchema, exportSpecSchema, type ExportJobData } from '@bookbot/shared';
 import { getStorage } from '@bookbot/storage';
-import { renderCover } from '../render/cover';
+import { renderCover, type CoverImageFile } from '../render/cover';
 import { renderInterior, type WordSearchContent } from '../render/interior';
 
 // BullMQ workers use blocking commands, which require maxRetriesPerRequest: null
@@ -54,12 +54,35 @@ export async function processExport(job: Job<ExportJobData>) {
       ? saved.data
       : coverDesignSchema.parse({ title, subtitle: listing?.subtitle ?? '' });
 
-    pdf = await renderCover({
-      ...design,
-      trimSize: project.trimSize,
-      pageCount: project.pageCount,
-      paper: project.paper,
-    });
+    // Only finished uploads from the project's own organization
+    const ids = [design.frontImageId, design.backImageId].filter((id): id is string => !!id);
+    const imageRows = ids.length
+      ? await db
+          .select()
+          .from(assets)
+          .where(and(inArray(assets.id, ids), eq(assets.orgId, project.orgId), eq(assets.status, 'ready')))
+      : [];
+    const imageFiles: Record<string, CoverImageFile> = {};
+    for (const row of imageRows) {
+      const bytes = await getStorage().get(row.r2Key);
+      if (bytes && row.mimeType) imageFiles[row.id] = { bytes, mimeType: row.mimeType };
+    }
+    const imageInfo = (id: string | null) => {
+      const row = imageRows.find((r) => r.id === id);
+      return row && imageFiles[row.id] && row.width && row.height ? { assetId: row.id, width: row.width, height: row.height } : null;
+    };
+
+    pdf = await renderCover(
+      {
+        ...design,
+        trimSize: project.trimSize,
+        pageCount: project.pageCount,
+        paper: project.paper,
+        frontImage: imageInfo(design.frontImageId),
+        backImage: imageInfo(design.backImageId),
+      },
+      imageFiles
+    );
   } else {
     const sets = await db
       .select()

@@ -1,67 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyExtensionToken } from '@/lib/tokens';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { z } from 'zod';
 import { estimateSalesFromBSR, getBSRCurve } from '@bookbot/core';
+import { marketplaceSchema } from '@bookbot/shared';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { requireExtensionToken } from '@/server/extension-tokens';
+import { errorResponse, readJson } from '@/server/org-access';
+
+const estimateSchema = z.object({
+  asin: z.string().max(20).optional(),
+  bsr: z.number().int().positive(),
+  price: z.number().nonnegative().optional(),
+  reviews: z.number().int().nonnegative().optional(),
+  category: z.string().trim().min(1).max(100).default('Books'),
+  marketplace: marketplaceSchema.default('US'),
+});
 
 export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Missing or invalid authorization header' }, { status: 401 });
-  }
-
-  const token = authHeader.substring(7);
-  const decoded = verifyExtensionToken(token);
-  if (!decoded) {
-    return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-  }
+  const auth = await requireExtensionToken(req);
+  if (!auth.ok) return auth.response;
 
   // Rate limit: 100 requests per minute per org
-  const rateLimit = await checkRateLimit(`ext:${decoded.orgId}`, 100, 60000);
+  const rateLimit = await checkRateLimit(`ext:${auth.value.orgId}`, 100, 60000);
+  const rateHeaders = {
+    'X-RateLimit-Limit': rateLimit.limit.toString(),
+    'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+    'X-RateLimit-Reset': rateLimit.resetTime.toString(),
+  };
   if (!rateLimit.allowed) {
-    return NextResponse.json(
-      { error: 'Rate limit exceeded', resetTime: rateLimit.resetTime },
-      { 
-        status: 429,
-        headers: {
-          'X-RateLimit-Limit': rateLimit.limit.toString(),
-          'X-RateLimit-Remaining': rateLimit.remaining.toString(),
-          'X-RateLimit-Reset': rateLimit.resetTime.toString(),
-        }
-      }
-    );
+    return NextResponse.json({ error: 'Rate limit exceeded', resetTime: rateLimit.resetTime }, { status: 429, headers: rateHeaders });
   }
 
-  const body = await req.json();
-  const { asin, bsr, price, reviews, category = 'Books', marketplace = 'US' } = body;
-
-  if (!bsr) {
-    return NextResponse.json({ error: 'Missing BSR' }, { status: 400 });
+  const parsed = estimateSchema.safeParse(await readJson(req));
+  if (!parsed.success) {
+    return errorResponse(400, 'Invalid input', { fields: parsed.error.flatten().fieldErrors });
   }
+  const { asin, bsr, price, reviews, category, marketplace } = parsed.data;
 
-  // Get BSR curve
   const curve = getBSRCurve(category, marketplace);
   if (!curve) {
-    return NextResponse.json({ error: 'Category not supported' }, { status: 400 });
+    return errorResponse(400, `No sales model for ${category} in ${marketplace} yet`);
   }
 
-  // Estimate sales
   const dailySales = estimateSalesFromBSR(bsr, curve.params);
-  const monthlySales = dailySales * 30;
-
-  return NextResponse.json({
-    asin,
-    bsr,
-    price,
-    reviews,
-    category,
-    marketplace,
-    estimatedDailySales: Math.round(dailySales),
-    estimatedMonthlySales: Math.round(monthlySales),
-  }, {
-    headers: {
-      'X-RateLimit-Limit': rateLimit.limit.toString(),
-      'X-RateLimit-Remaining': rateLimit.remaining.toString(),
-      'X-RateLimit-Reset': rateLimit.resetTime.toString(),
-    }
-  });
+  return NextResponse.json(
+    {
+      asin,
+      bsr,
+      price,
+      reviews,
+      category,
+      marketplace,
+      estimatedDailySales: Math.round(dailySales),
+      estimatedMonthlySales: Math.round(dailySales * 30),
+    },
+    { headers: rateHeaders }
+  );
 }

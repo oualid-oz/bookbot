@@ -43,6 +43,9 @@ export const coverDesignSchema = z.object({
   spineColor: hexColor.default('#15294a'),
   textColor: hexColor.default('#ffffff'),
   titleSize: z.number().min(16).max(72).default(40),
+  /** Optional background images (asset IDs), cropped to fill their panel */
+  frontImageId: z.string().uuid().nullable().default(null),
+  backImageId: z.string().uuid().nullable().default(null),
 });
 
 export type CoverDesign = z.infer<typeof coverDesignSchema>;

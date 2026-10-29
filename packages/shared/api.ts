@@ -50,5 +50,13 @@ export const exportRequestSchema = z.object({
   spec: exportSpecSchema.default({}),
 });
 
-export const ASSET_KINDS = ['image', 'font', 'other'] as const;
-export const assetKindSchema = z.enum(ASSET_KINDS);
+/** Image types pdf-lib can embed in exports */
+export const IMAGE_TYPES = ['image/png', 'image/jpeg'] as const;
+export const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
+
+export const assetUploadSchema = z.object({
+  orgId: z.string().uuid().optional(),
+  name: z.string().trim().min(1).max(255),
+  contentType: z.enum(IMAGE_TYPES, { errorMap: () => ({ message: 'Use a PNG or JPEG image' }) }),
+  size: z.number().int().positive().max(MAX_IMAGE_BYTES, 'Images can be at most 25 MB'),
+});

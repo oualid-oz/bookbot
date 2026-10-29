@@ -1,17 +1,7 @@
 {
-  "extends": "../../base-tsconfig.json",
+  // WXT generates this (wxt prepare): auto-imported globals like `browser`
+  "extends": "./.wxt/tsconfig.json",
   "compilerOptions": {
-    "lib": ["ES2022", "DOM"],
-    "module": "ESNext",
-    "jsx": "react-jsx",
-    "paths": {
-      "@/*": ["./src/*"],
-      "@bookbot/db": ["../../packages/db"],
-      "@bookbot/core": ["../../packages/core"],
-      "@bookbot/puzzles": ["../../packages/puzzles"],
-      "@bookbot/shared": ["../../packages/shared"]
-    }
-  },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["node_modules", "dist", ".wxt"]
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
+  }
 }

@@ -107,7 +107,16 @@ export function getScoreRating(score: number): string {
 /**
  * Calculate metrics from top results
  */
-export function calculateMetricsFromResults(results: any[]): NicheMetrics {
+/** One search result; only the numeric fields used for scoring are read */
+export interface NicheResult {
+  sales?: number;
+  reviews?: number;
+  bsr?: number;
+  price?: number;
+  keywordVolume?: number;
+}
+
+export function calculateMetricsFromResults(results: NicheResult[]): NicheMetrics {
   if (results.length === 0) {
     return {
       keywordVolume: 0,

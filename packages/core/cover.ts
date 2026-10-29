@@ -17,10 +17,35 @@ export interface CoverLayoutInput {
   spineColor: string;
   textColor: string;
   titleSize: number;
+  /** Background images with their pixel size; null for none */
+  frontImage?: CoverImage | null;
+  backImage?: CoverImage | null;
 }
+
+export interface CoverImage {
+  assetId: string;
+  width: number;
+  height: number;
+}
+
+/** KDP recommends at least 300 DPI at print size */
+export const MIN_PRINT_DPI = 300;
 
 export type CoverElement =
   | { kind: 'rect'; x: number; y: number; width: number; height: number; color: string }
+  | {
+      /** Fills the box; `crop` is the part of the image shown, in image pixels */
+      kind: 'image';
+      panel: 'front' | 'back';
+      assetId: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      crop: { x: number; y: number; width: number; height: number };
+      /** Resolution the image prints at */
+      effectiveDpi: number;
+    }
   | {
       kind: 'text';
       text: string;
@@ -56,6 +81,24 @@ export interface CoverLayout {
 export const COVER_SAFE_MARGIN = 0.5;
 export const LINE_HEIGHT = 1.2;
 
+/**
+ * Fill a box with an image like CSS `object-fit: cover`: scale until both
+ * sides are covered, crop the overflow evenly
+ */
+export function coverFit(imageWidth: number, imageHeight: number, boxWidth: number, boxHeight: number) {
+  const scale = Math.max(boxWidth / imageWidth, boxHeight / imageHeight); // inches per pixel
+  const width = boxWidth / scale;
+  const height = boxHeight / scale;
+  return {
+    crop: { x: (imageWidth - width) / 2, y: (imageHeight - height) / 2, width, height },
+    effectiveDpi: Math.round(1 / scale),
+  };
+}
+
+function imageElement(panel: 'front' | 'back', image: CoverImage, x: number, width: number, height: number): CoverElement {
+  return { kind: 'image', panel, assetId: image.assetId, x, y: 0, width, height, ...coverFit(image.width, image.height, width, height) };
+}
+
 export function layoutCover(input: CoverLayoutInput): CoverLayout {
   const dims = calculateCoverDimensions(input.trimSize, input.pageCount, input.paper);
   const { bleed, width: trimWidth, height: trimHeight, spineWidth } = dims;
@@ -68,6 +111,14 @@ export function layoutCover(input: CoverLayoutInput): CoverLayout {
     { kind: 'rect', x: 0, y: 0, width: dims.totalWidth, height: dims.totalHeight, color: input.backgroundColor },
     { kind: 'rect', x: spineLeft, y: 0, width: spineWidth, height: dims.totalHeight, color: input.spineColor },
   ];
+
+  // Background images cover their whole panel, bleed included
+  if (input.backImage) {
+    elements.push(imageElement('back', input.backImage, 0, spineLeft, dims.totalHeight));
+  }
+  if (input.frontImage) {
+    elements.push(imageElement('front', input.frontImage, frontLeft, dims.totalWidth - frontLeft, dims.totalHeight));
+  }
 
   const text = (t: string, x: number, y: number, size: number, bold: boolean, align: 'left' | 'center') => {
     if (t.trim()) {
