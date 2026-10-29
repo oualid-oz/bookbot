@@ -3,20 +3,26 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "build": "tsc --noEmit",
+    "start": "tsx src/index.ts",
     "lint": "eslint",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
+    "@bookbot/core": "*",
+    "@bookbot/db": "*",
+    "@bookbot/shared": "*",
+    "@bookbot/storage": "*",
     "bullmq": "^5.20.0",
-    "ioredis": "^5.4.0"
+    "drizzle-orm": "^0.33.0",
+    "ioredis": "^5.4.0",
+    "pdf-lib": "^1.17.1",
+    "tsx": "^4.18.0"
   },
   "devDependencies": {
     "@types/node": "^20",
     "eslint": "^9",
-    "tsx": "^4.18.0",
     "typescript": "^5"
   }
 }

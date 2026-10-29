@@ -1,8 +1,10 @@
-import { eq, and, lt, gte } from 'drizzle-orm';
+import { eq, and, gte, desc } from 'drizzle-orm';
 import { db } from '@bookbot/db';
 import { keywordCache, nicheSnapshots, savedNiches } from '@bookbot/db/schema';
 
 const CACHE_TTL_DAYS = 7;
+
+export type Marketplace = (typeof keywordCache.marketplace.enumValues)[number];
 
 /**
  * Get keyword data from cache
@@ -10,7 +12,7 @@ const CACHE_TTL_DAYS = 7;
 export async function getCachedKeyword(
   orgId: string,
   keyword: string,
-  marketplace: string = 'US'
+  marketplace: Marketplace = 'US'
 ) {
   const cached = await db
     .select()
@@ -34,7 +36,7 @@ export async function getCachedKeyword(
 export async function cacheKeyword(
   orgId: string,
   keyword: string,
-  marketplace: string,
+  marketplace: Marketplace,
   data: { volume: number; competition: number }
 ) {
   const expiresAt = new Date();
@@ -45,8 +47,17 @@ export async function cacheKeyword(
     keyword,
     marketplace,
     volume: data.volume,
-    competition: data.competition,
+    competition: String(data.competition),
     expiresAt,
+  }).onConflictDoUpdate({
+    // Refresh an expired entry in place
+    target: [keywordCache.orgId, keywordCache.keyword, keywordCache.marketplace],
+    set: {
+      volume: data.volume,
+      competition: String(data.competition),
+      fetchedAt: new Date(),
+      expiresAt,
+    },
   });
 }
 
@@ -56,7 +67,7 @@ export async function cacheKeyword(
 export async function saveNicheSnapshot(
   orgId: string,
   keyword: string,
-  marketplace: string,
+  marketplace: Marketplace,
   topResults: any[],
   score: number
 ) {
@@ -65,7 +76,7 @@ export async function saveNicheSnapshot(
     keyword,
     marketplace,
     topResults,
-    score,
+    score: String(score),
   });
 }
 
@@ -75,7 +86,7 @@ export async function saveNicheSnapshot(
 export async function getNicheSnapshot(
   orgId: string,
   keyword: string,
-  marketplace: string = 'US'
+  marketplace: Marketplace = 'US'
 ) {
   const snapshot = await db
     .select()
@@ -87,7 +98,7 @@ export async function getNicheSnapshot(
         eq(nicheSnapshots.marketplace, marketplace)
       )
     )
-    .orderBy(nicheSnapshots.fetchedAt)
+    .orderBy(desc(nicheSnapshots.fetchedAt))
     .limit(1);
 
   return snapshot[0] || null;
@@ -122,6 +133,6 @@ export async function getSavedNiches(orgId: string) {
 /**
  * Delete saved niche
  */
-export async function deleteSavedNiche(id: string) {
-  await db.delete(savedNiches).where(eq(savedNiches.id, id));
+export async function deleteSavedNiche(orgId: string, id: string) {
+  await db.delete(savedNiches).where(and(eq(savedNiches.orgId, orgId), eq(savedNiches.id, id)));
 }

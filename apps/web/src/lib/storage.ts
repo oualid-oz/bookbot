@@ -1,4 +1,5 @@
-import { eq } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+import { and, eq } from 'drizzle-orm';
 import { db } from '@bookbot/db';
 import { assets } from '@bookbot/db/schema';
 import sharp from 'sharp';
@@ -14,7 +15,9 @@ export async function generatePresignedUploadUrl(
 ): Promise<{ uploadUrl: string; key: string }> {
   // Placeholder implementation
   // In production, use S3/R2 SDK to generate presigned URL
-  const key = `assets/${orgId}/${Date.now()}-${fileName}`;
+  // Never trust the client's file name inside a storage key
+  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '').slice(-100) || 'file';
+  const key = `assets/${orgId}/${randomUUID()}-${safeName}`;
   const uploadUrl = `https://${process.env.R2_PUBLIC_URL}/${key}`;
   
   return { uploadUrl, key };
@@ -36,7 +39,7 @@ export async function validateImage(
     
     // Estimate DPI from resolution if available
     // Note: This is simplified - actual DPI validation requires embedded metadata
-    const dpi = metadata.density?.x || 72;
+    const dpi = metadata.density || 72;
     
     if (dpi < minDPI) {
       return {
@@ -88,11 +91,11 @@ export async function saveAsset(
 /**
  * Get asset by ID
  */
-export async function getAsset(assetId: string) {
+export async function getAsset(orgId: string, assetId: string) {
   const asset = await db
     .select()
     .from(assets)
-    .where(eq(assets.id, assetId))
+    .where(and(eq(assets.orgId, orgId), eq(assets.id, assetId)))
     .limit(1);
 
   return asset[0] || null;

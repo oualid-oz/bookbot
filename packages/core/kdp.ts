@@ -63,6 +63,7 @@ export function calculateCoverDimensions(
   height: number;
   spineWidth: number;
   totalWidth: number;
+  totalHeight: number;
   bleed: number;
 } {
   const trim = TRIM_SIZES[trimSize] || TRIM_SIZES['6x9'];
@@ -71,13 +72,14 @@ export function calculateCoverDimensions(
 
   // Full cover width = back bleed + back cover + spine + front cover + front bleed
   const totalWidth = bleed + trim.width + spineWidth + trim.width + bleed;
-  const height = trim.height + bleed * 2;
+  const totalHeight = trim.height + bleed * 2;
 
   return {
     width: trim.width,
     height: trim.height,
     spineWidth,
     totalWidth,
+    totalHeight,
     bleed,
   };
 }
@@ -104,6 +106,25 @@ export function calculateInteriorDimensions(
     totalWidth: trim.width + bleed * 2,
     totalHeight: trim.height + bleed * 2,
   };
+}
+
+/**
+ * KDP minimum inside (gutter) margin in inches, which grows with page count
+ */
+export function getMinimumInsideMargin(pageCount: number): number {
+  if (pageCount <= 150) return 0.375;
+  if (pageCount <= 300) return 0.5;
+  if (pageCount <= 500) return 0.625;
+  if (pageCount <= 700) return 0.75;
+  return 0.875;
+}
+
+/** KDP minimum outside margin in inches (no-bleed interiors) */
+export const MIN_OUTSIDE_MARGIN = 0.25;
+
+/** KDP only allows spine text on books with more than 79 pages */
+export function canHaveSpineText(pageCount: number): boolean {
+  return pageCount > 79;
 }
 
 /**

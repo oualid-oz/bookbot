@@ -3,8 +3,8 @@ import {
   calculateSpineWidth,
   calculateCoverDimensions,
   calculateInteriorDimensions,
-  TRIM_SIZES,
-  PAPER_TYPES,
+  getMinimumInsideMargin,
+  canHaveSpineText,
 } from './kdp';
 
 describe('KDP Calculators', () => {
@@ -33,7 +33,9 @@ describe('KDP Calculators', () => {
       expect(dims.height).toBe(9);
       expect(dims.spineWidth).toBeCloseTo(0.22, 2);
       expect(dims.bleed).toBe(0.125);
-      expect(dims.totalWidth).toBeCloseTo(12.345, 2);
+      // 0.125 bleed + 6 back + 0.22 spine + 6 front + 0.125 bleed
+      expect(dims.totalWidth).toBeCloseTo(12.47, 2);
+      expect(dims.totalHeight).toBe(9.25);
     });
 
     it('should handle unknown trim size', () => {
@@ -50,6 +52,23 @@ describe('KDP Calculators', () => {
       expect(dims.bleed).toBe(0.125);
       expect(dims.totalWidth).toBe(6.25);
       expect(dims.totalHeight).toBe(9.25);
+    });
+  });
+
+  describe('getMinimumInsideMargin', () => {
+    it('should grow with page count', () => {
+      expect(getMinimumInsideMargin(24)).toBe(0.375);
+      expect(getMinimumInsideMargin(150)).toBe(0.375);
+      expect(getMinimumInsideMargin(151)).toBe(0.5);
+      expect(getMinimumInsideMargin(500)).toBe(0.625);
+      expect(getMinimumInsideMargin(828)).toBe(0.875);
+    });
+  });
+
+  describe('canHaveSpineText', () => {
+    it('should require more than 79 pages', () => {
+      expect(canHaveSpineText(79)).toBe(false);
+      expect(canHaveSpineText(80)).toBe(true);
     });
   });
 });

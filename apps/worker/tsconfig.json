@@ -1,9 +1,8 @@
 {
   "extends": "../../base-tsconfig.json",
   "compilerOptions": {
-    "moduleResolution": "node",
-    "outDir": "./dist",
-    "rootDir": "./src",
+    "noEmit": true,
+    "module": "esnext",
     "paths": {
       "@bookbot/db": ["../../packages/db"],
       "@bookbot/core": ["../../packages/core"],

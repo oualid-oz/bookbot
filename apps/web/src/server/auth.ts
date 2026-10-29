@@ -1,30 +1,115 @@
-import { NextAuthOptions } from 'next-auth';
+import type { NextAuthOptions } from 'next-auth';
+import type { Provider } from 'next-auth/providers/index';
+import GoogleProvider, { type GoogleProfile } from 'next-auth/providers/google';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import { getPasswordUser, provisionUser } from './users';
+import { verifyAgainstDummy, verifyPassword } from '@/lib/password';
+import { checkRateLimit } from '@/lib/rate-limit';
+
+const providers: Provider[] = [
+  CredentialsProvider({
+    id: 'password',
+    name: 'Email',
+    credentials: {
+      email: { label: 'Email', type: 'email' },
+      password: { label: 'Password', type: 'password' },
+    },
+    async authorize(credentials) {
+      const email = credentials?.email?.trim().toLowerCase();
+      const password = credentials?.password;
+      if (!email || !password) return null;
+
+      // 10 attempts per 15 minutes per email
+      if (!checkRateLimit(`login:${email}`, 10, 15 * 60 * 1000).allowed) return null;
+
+      const user = await getPasswordUser(email);
+      if (!user?.passwordHash) {
+        await verifyAgainstDummy(password);
+        return null;
+      }
+      if (!(await verifyPassword(password, user.passwordHash))) return null;
+
+      return { id: user.id, email: user.email, name: user.name };
+    },
+  }),
+];
+
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  providers.push(
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    })
+  );
+}
+
+// Passwordless email login for local development only. `next build` and
+// `next start` run with NODE_ENV=production, so this never ships.
+if (process.env.NODE_ENV === 'development') {
+  providers.push(
+    CredentialsProvider({
+      id: 'dev-login',
+      name: 'Dev login',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+      },
+      async authorize(credentials) {
+        const email = credentials?.email?.trim().toLowerCase();
+        if (!email || !/^[^\s@]+@[^\s@]+$/.test(email)) return null;
+        return { id: email, email, name: email.split('@')[0] };
+      },
+    })
+  );
+}
 
 export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET,
   session: {
     strategy: 'jwt',
   },
   pages: {
     signIn: '/login',
   },
-  providers: [
-    // Add OAuth providers here (Google, GitHub, etc.)
-    // Example:
-    // GoogleProvider({
-    //   clientId: process.env.GOOGLE_CLIENT_ID!,
-    //   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    // }),
-  ],
+  providers,
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
+    async signIn({ user, account, profile }) {
+      if (!user.email) return false;
+      // Accounts are linked by email, so only accept verified Google emails
+      if (account?.provider === 'google') {
+        return (profile as GoogleProfile | undefined)?.email_verified === true;
+      }
+      return true;
+    },
+    async jwt({ token, user, account }) {
+      // `account` is only present on sign-in: map the provider user to our DB user
+      if (account?.provider === 'password') {
+        // authorize() already returned the DB user
         token.id = user.id;
+      } else if (account && user?.email) {
+        token.id = await provisionUser({
+          email: user.email,
+          name: user.name,
+          image: user.image,
+          provider: account.provider,
+          providerAccountId: account.providerAccountId,
+          type: account.type,
+          emailVerified: account.provider === 'google',
+          tokens: {
+            access_token: account.access_token,
+            refresh_token: account.refresh_token,
+            expires_at: account.expires_at,
+            token_type: account.token_type,
+            scope: account.scope,
+            id_token: account.id_token,
+            session_state: account.session_state,
+          },
+        });
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
+        session.user.id = token.id;
       }
       return session;
     },

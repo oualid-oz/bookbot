@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, uuid, varchar, jsonb, integer, boolean, decimal, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, varchar, jsonb, integer, boolean, decimal, index, uniqueIndex, primaryKey } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 // NextAuth adapter tables
@@ -15,7 +15,7 @@ export const accounts = pgTable('accounts', {
   id_token: text('id_token'),
   session_state: text('session_state'),
 }, (table) => ({
-  providerAccountIdIdx: index('accounts_provider_account_id_idx').on(table.providerAccountId),
+  pk: primaryKey({ columns: [table.provider, table.providerAccountId] }),
   userIdIdx: index('accounts_user_id_idx').on(table.userId),
 }));
 
@@ -29,10 +29,10 @@ export const sessions = pgTable('sessions', {
 
 export const verificationTokens = pgTable('verification_tokens', {
   identifier: varchar('identifier', { length: 255 }).notNull(),
-  token: varchar('token', { length: 255 }).notNull().primaryKey(),
+  token: varchar('token', { length: 255 }).notNull(),
   expires: timestamp('expires', { mode: 'date' }).notNull(),
 }, (table) => ({
-  identifierTokenIdx: index('verification_tokens_identifier_token_idx').on(table.identifier, table.token),
+  pk: primaryKey({ columns: [table.identifier, table.token] }),
 }));
 
 // Users table
@@ -42,11 +42,10 @@ export const users = pgTable('users', {
   name: varchar('name', { length: 255 }),
   emailVerified: timestamp('emailVerified'),
   image: varchar('image', { length: 500 }),
+  passwordHash: text('password_hash'), // null for OAuth-only users
   createdAt: timestamp('createdAt').defaultNow().notNull(),
   updatedAt: timestamp('updatedAt').defaultNow().notNull(),
-}, (table) => ({
-  emailIdx: index('users_email_idx').on(table.email),
-}));
+});
 
 // Organizations table
 export const organizations = pgTable('organizations', {
@@ -55,9 +54,7 @@ export const organizations = pgTable('organizations', {
   slug: varchar('slug', { length: 100 }).notNull().unique(),
   createdAt: timestamp('createdAt').defaultNow().notNull(),
   updatedAt: timestamp('updatedAt').defaultNow().notNull(),
-}, (table) => ({
-  slugIdx: index('organizations_slug_idx').on(table.slug),
-}));
+});
 
 // Memberships table (users <-> organizations)
 export const memberships = pgTable('memberships', {
@@ -67,9 +64,8 @@ export const memberships = pgTable('memberships', {
   role: varchar('role', { length: 50, enum: ['owner', 'admin', 'member'] }).notNull().default('member'),
   createdAt: timestamp('createdAt').defaultNow().notNull(),
 }, (table) => ({
-  userIdIdx: index('memberships_user_id_idx').on(table.userId),
   orgIdIdx: index('memberships_org_id_idx').on(table.orgId),
-  uniqueMembership: index('memberships_user_org_unique').on(table.userId, table.orgId),
+  uniqueMembership: uniqueIndex('memberships_user_org_unique').on(table.userId, table.orgId),
 }));
 
 // Subscriptions table
@@ -87,7 +83,6 @@ export const subscriptions = pgTable('subscriptions', {
   updatedAt: timestamp('updatedAt').defaultNow().notNull(),
 }, (table) => ({
   orgIdIdx: index('subscriptions_org_id_idx').on(table.orgId),
-  stripeSubIdx: index('subscriptions_stripe_sub_idx').on(table.stripeSubscriptionId),
 }));
 
 // Entitlements usage tracking
@@ -101,7 +96,7 @@ export const entitlementsUsage = pgTable('entitlements_usage', {
   createdAt: timestamp('createdAt').defaultNow().notNull(),
   updatedAt: timestamp('updatedAt').defaultNow().notNull(),
 }, (table) => ({
-  orgMetricPeriodIdx: index('entitlements_org_metric_period_idx').on(table.orgId, table.metric, table.period, table.periodStart),
+  orgMetricPeriodIdx: uniqueIndex('entitlements_org_metric_period_idx').on(table.orgId, table.metric, table.period, table.periodStart),
 }));
 
 // Relations
@@ -167,7 +162,7 @@ export const keywordCache = pgTable('keyword_cache', {
   fetchedAt: timestamp('fetched_at').defaultNow().notNull(),
   expiresAt: timestamp('expires_at').notNull(),
 }, (table) => ({
-  orgKeywordMarketIdx: index('keyword_cache_org_keyword_market_idx').on(table.orgId, table.keyword, table.marketplace),
+  orgKeywordMarketIdx: uniqueIndex('keyword_cache_org_keyword_market_idx').on(table.orgId, table.keyword, table.marketplace),
   expiresAtIdx: index('keyword_cache_expires_at_idx').on(table.expiresAt),
 }));
 
@@ -193,7 +188,7 @@ export const bsrCurves = pgTable('bsr_curves', {
   createdAt: timestamp('createdAt').defaultNow().notNull(),
   updatedAt: timestamp('updatedAt').defaultNow().notNull(),
 }, (table) => ({
-  categoryMarketIdx: index('bsr_curves_category_market_idx').on(table.category, table.marketplace),
+  categoryMarketIdx: uniqueIndex('bsr_curves_category_market_idx').on(table.category, table.marketplace),
 }));
 
 // Saved niches table
@@ -255,8 +250,7 @@ export const projectDocs = pgTable('project_docs', {
   createdAt: timestamp('createdAt').defaultNow().notNull(),
   updatedAt: timestamp('updatedAt').defaultNow().notNull(),
 }, (table) => ({
-  projectIdx: index('project_docs_project_idx').on(table.projectId),
-  kindIdx: index('project_docs_kind_idx').on(table.kind),
+  projectKindIdx: uniqueIndex('project_docs_project_kind_idx').on(table.projectId, table.kind),
 }));
 
 // Assets table (uploaded images, fonts, etc.)
@@ -273,7 +267,7 @@ export const assets = pgTable('assets', {
   createdAt: timestamp('createdAt').defaultNow().notNull(),
 }, (table) => ({
   orgIdx: index('assets_org_idx').on(table.orgId),
-  r2KeyIdx: index('assets_r2_key_idx').on(table.r2Key),
+  r2KeyIdx: uniqueIndex('assets_r2_key_idx').on(table.r2Key),
 }));
 
 // Exports table
@@ -334,7 +328,7 @@ export const listings = pgTable('listings', {
   createdAt: timestamp('createdAt').defaultNow().notNull(),
   updatedAt: timestamp('updatedAt').defaultNow().notNull(),
 }, (table) => ({
-  projectIdx: index('listings_project_idx').on(table.projectId),
+  projectIdx: uniqueIndex('listings_project_idx').on(table.projectId),
 }));
 
 // Relations for project tables

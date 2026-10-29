@@ -2,12 +2,13 @@ import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { stripe } from '@/server/stripe';
 import { db } from '@bookbot/db';
-import { subscriptions } from '@bookbot/db/schema';
+import { organizations, subscriptions } from '@bookbot/db/schema';
 import { eq } from 'drizzle-orm';
+import { isUuid } from '@/server/org-access';
 
 export async function POST(req: Request) {
   const body = await req.text();
-  const signature = headers().get('stripe-signature')!;
+  const signature = (await headers()).get('stripe-signature')!;
 
   let event;
 
@@ -30,18 +31,36 @@ export async function POST(req: Request) {
       const customerId = session.customer;
       const subscriptionId = session.subscription;
 
-      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      const orgId = session.metadata?.orgId;
 
-      await db.insert(subscriptions).values({
-        orgId: session.metadata?.orgId || '',
-        stripeSubscriptionId: subscriptionId,
+      // Checkout sessions must be created with metadata.orgId. Acknowledge bad
+      // events instead of failing, since Stripe would retry them for days.
+      const [org] = isUuid(orgId)
+        ? await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, orgId)).limit(1)
+        : [];
+      if (!org) {
+        console.error(`Stripe checkout ${session.id} has missing or unknown metadata.orgId`);
+        break;
+      }
+
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      const values = {
         stripeCustomerId: customerId,
         stripePriceId: subscription.items.data[0].price.id,
         status: subscription.status as any,
         cancelAtPeriodEnd: subscription.cancel_at_period_end,
         currentPeriodStart: new Date(subscription.current_period_start * 1000),
         currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-      });
+      };
+
+      // Stripe can deliver the same event more than once
+      await db
+        .insert(subscriptions)
+        .values({ orgId: org.id, stripeSubscriptionId: subscriptionId, ...values })
+        .onConflictDoUpdate({
+          target: subscriptions.stripeSubscriptionId,
+          set: { ...values, updatedAt: new Date() },
+        });
 
       break;
     }

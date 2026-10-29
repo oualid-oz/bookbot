@@ -1,29 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
+import { keywordLookupSchema } from '@bookbot/shared';
 import { getCachedKeyword, cacheKeyword } from '@/lib/keywords';
 import { checkEntitlement, incrementUsage } from '@/lib/entitlements';
-import { calculateNicheScore, getScoreRating } from '@bookbot/core';
+import { errorResponse, readJson, requireOrgAccess } from '@/server/org-access';
 
 export async function POST(req: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const parsed = keywordLookupSchema.safeParse(await readJson(req));
+  if (!parsed.success) {
+    return errorResponse(400, 'Invalid input', { fields: parsed.error.flatten().fieldErrors });
   }
+  const { keyword, marketplace } = parsed.data;
 
-  const body = await req.json();
-  const { keyword, marketplace = 'US', orgId } = body;
-
-  if (!keyword || !orgId) {
-    return NextResponse.json({ error: 'Missing keyword or orgId' }, { status: 400 });
-  }
+  const access = await requireOrgAccess(parsed.data.orgId);
+  if (!access.ok) return access.response;
+  const { orgId } = access.value;
 
   // Check entitlement
   const entitlement = await checkEntitlement(orgId, 'keywordLookupsPerDay');
   if (!entitlement.allowed) {
-    return NextResponse.json(
-      { error: 'Keyword lookup limit exceeded', limit: entitlement.limit, used: entitlement.used },
-      { status: 429 }
-    );
+    return errorResponse(429, 'Keyword lookup limit exceeded', { limit: entitlement.limit, used: entitlement.used });
   }
 
   // Check cache
@@ -33,7 +28,7 @@ export async function POST(req: NextRequest) {
       keyword,
       marketplace,
       volume: cached.volume,
-      competition: cached.competition,
+      competition: Number(cached.competition),
       cached: true,
     });
   }

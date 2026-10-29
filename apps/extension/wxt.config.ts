@@ -2,10 +2,6 @@ import { defineConfig } from 'wxt';
 
 export default defineConfig({
   srcDir: 'src',
-  entrypoints: {
-    content: 'content/index.ts',
-    popup: 'popup/index.html',
-  },
   manifest: {
     name: 'Bookbot KDP Spy',
     description: 'Analyze Amazon KDP results for BSR, sales estimates, and competition',

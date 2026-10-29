@@ -41,3 +41,7 @@ apps/worker/dist
 # extension
 apps/extension/.wxt
 apps/extension/dist
+apps/extension/.output
+
+# local storage (exports, uploads)
+.data

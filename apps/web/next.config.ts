@@ -15,7 +15,9 @@ const nextConfig: NextConfig = {
       },
     },
   },
-  transpilePackages: ['@bookbot/db', '@bookbot/core', '@bookbot/puzzles', '@bookbot/shared'],
+  transpilePackages: ['@bookbot/db', '@bookbot/core', '@bookbot/puzzles', '@bookbot/shared', '@bookbot/storage'],
+  // Queue client stays a plain Node dependency rather than being bundled
+  serverExternalPackages: ['bullmq'],
 };
 
 export default nextConfig;

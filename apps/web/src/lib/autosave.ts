@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '@bookbot/db';
 import { projectDocs } from '@bookbot/db/schema';
 
@@ -36,8 +36,7 @@ export async function saveProjectDoc(
   const existing = await db
     .select()
     .from(projectDocs)
-    .where(eq(projectDocs.projectId, projectId))
-    .where(eq(projectDocs.kind, kind))
+    .where(and(eq(projectDocs.projectId, projectId), eq(projectDocs.kind, kind)))
     .limit(1);
 
   if (existing[0]) {
@@ -71,8 +70,7 @@ export async function getProjectDoc(
   const doc = await db
     .select()
     .from(projectDocs)
-    .where(eq(projectDocs.projectId, projectId))
-    .where(eq(projectDocs.kind, kind))
+    .where(and(eq(projectDocs.projectId, projectId), eq(projectDocs.kind, kind)))
     .limit(1);
 
   return doc[0] || null;

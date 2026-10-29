@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
+import { nicheAnalysisSchema, nicheQuerySchema } from '@bookbot/shared';
 import { saveNicheSnapshot, getNicheSnapshot } from '@/lib/keywords';
 import { calculateNicheScore, getScoreRating, calculateMetricsFromResults } from '@bookbot/core';
+import { errorResponse, readJson, requireOrgAccess } from '@/server/org-access';
 
 export async function POST(req: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const parsed = nicheAnalysisSchema.safeParse(await readJson(req));
+  if (!parsed.success) {
+    return errorResponse(400, 'Invalid input', { fields: parsed.error.flatten().fieldErrors });
   }
+  const { keyword, marketplace, topResults } = parsed.data;
 
-  const body = await req.json();
-  const { keyword, marketplace = 'US', orgId, topResults } = body;
-
-  if (!keyword || !orgId || !topResults) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-  }
+  const access = await requireOrgAccess(parsed.data.orgId);
+  if (!access.ok) return access.response;
 
   // Calculate metrics
   const metrics = calculateMetricsFromResults(topResults);
@@ -24,7 +22,7 @@ export async function POST(req: NextRequest) {
   const rating = getScoreRating(score);
 
   // Save snapshot
-  await saveNicheSnapshot(orgId, keyword, marketplace, topResults, score);
+  await saveNicheSnapshot(access.value.orgId, keyword, marketplace, topResults, score);
 
   return NextResponse.json({
     keyword,
@@ -36,24 +34,23 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   const searchParams = req.nextUrl.searchParams;
-  const keyword = searchParams.get('keyword');
-  const marketplace = searchParams.get('marketplace') || 'US';
-  const orgId = searchParams.get('orgId');
-
-  if (!keyword || !orgId) {
-    return NextResponse.json({ error: 'Missing keyword or orgId' }, { status: 400 });
+  const parsed = nicheQuerySchema.safeParse({
+    keyword: searchParams.get('keyword') ?? undefined,
+    marketplace: searchParams.get('marketplace') ?? undefined,
+    orgId: searchParams.get('orgId') ?? undefined,
+  });
+  if (!parsed.success) {
+    return errorResponse(400, 'Invalid input', { fields: parsed.error.flatten().fieldErrors });
   }
 
-  const snapshot = await getNicheSnapshot(orgId, keyword, marketplace);
+  const access = await requireOrgAccess(parsed.data.orgId);
+  if (!access.ok) return access.response;
+
+  const snapshot = await getNicheSnapshot(access.value.orgId, parsed.data.keyword, parsed.data.marketplace);
 
   if (!snapshot) {
-    return NextResponse.json({ error: 'Snapshot not found' }, { status: 404 });
+    return errorResponse(404, 'Snapshot not found');
   }
 
   return NextResponse.json(snapshot);
