@@ -18,6 +18,10 @@ const nextConfig: NextConfig = {
   transpilePackages: ['@bookbot/db', '@bookbot/core', '@bookbot/puzzles', '@bookbot/shared', '@bookbot/storage'],
   // Queue client stays a plain Node dependency rather than being bundled
   serverExternalPackages: ['bullmq'],
+  // The cover editor moved into each project
+  async redirects() {
+    return [{ source: '/studio', destination: '/projects', permanent: false }];
+  },
 };
 
 export default nextConfig;

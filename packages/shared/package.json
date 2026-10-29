@@ -8,6 +8,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@bookbot/core": "*",
     "zod": "^3.23.0"
   },
   "devDependencies": {

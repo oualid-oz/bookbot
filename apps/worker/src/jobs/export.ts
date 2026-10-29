@@ -1,8 +1,8 @@
 import { Worker, Job } from 'bullmq';
 import Redis from 'ioredis';
-import { asc, eq } from 'drizzle-orm';
-import { db, exports, listings, projects, puzzleSets } from '@bookbot/db';
-import { EXPORT_QUEUE, exportSpecSchema, type ExportJobData } from '@bookbot/shared';
+import { and, asc, eq } from 'drizzle-orm';
+import { db, exports, listings, projectDocs, projects, puzzleSets } from '@bookbot/db';
+import { EXPORT_QUEUE, coverDesignSchema, exportSpecSchema, type ExportJobData } from '@bookbot/shared';
 import { getStorage } from '@bookbot/storage';
 import { renderCover } from '../render/cover';
 import { renderInterior, type WordSearchContent } from '../render/interior';
@@ -43,9 +43,19 @@ export async function processExport(job: Job<ExportJobData>) {
 
   let pdf: Uint8Array;
   if (spec.kind === 'cover') {
+    // The saved editor design, or the default design with the book's title
+    const [doc] = await db
+      .select({ jsonState: projectDocs.jsonState })
+      .from(projectDocs)
+      .where(and(eq(projectDocs.projectId, project.id), eq(projectDocs.kind, 'cover')))
+      .limit(1);
+    const saved = coverDesignSchema.safeParse(doc?.jsonState);
+    const design = saved.success
+      ? saved.data
+      : coverDesignSchema.parse({ title, subtitle: listing?.subtitle ?? '' });
+
     pdf = await renderCover({
-      title,
-      subtitle: listing?.subtitle,
+      ...design,
       trimSize: project.trimSize,
       pageCount: project.pageCount,
       paper: project.paper,

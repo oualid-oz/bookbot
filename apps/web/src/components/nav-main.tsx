@@ -23,16 +23,19 @@ import { usePathname } from "next/navigation"
 import { isNavActive, type AppNavItem } from "@/components/app-nav"
 
 export function NavMain({ items }: { items: AppNavItem[] }) {
-  const pathname = usePathname()
+  return <NavMainList items={items} pathname={usePathname()} />
+}
 
+/** Nav without URL access; pathname=null renders nothing as active */
+export function NavMainList({ items, pathname }: { items: AppNavItem[]; pathname: string | null }) {
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Workspace</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
-          <Collapsible key={item.title} asChild defaultOpen={isNavActive(pathname, item.url)}>
+          <Collapsible key={item.title} asChild defaultOpen={!!pathname && isNavActive(pathname, item.url)}>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip={item.title} isActive={isNavActive(pathname, item.url)}>
+              <SidebarMenuButton asChild tooltip={item.title} isActive={!!pathname && isNavActive(pathname, item.url)}>
                 <Link href={item.url}>
                   <item.icon />
                   <span>{item.title}</span>

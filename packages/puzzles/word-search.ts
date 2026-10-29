@@ -38,6 +38,36 @@ export class SeededRandom {
   }
 }
 
+export interface WordSearchPlacement {
+  word: string;
+  start: [number, number];
+  end: [number, number];
+}
+
+export interface WordSearchResult {
+  grid: string[][];
+  solution: WordSearchPlacement[];
+  /** Words that could not be placed (too long for the grid, or no room left) */
+  unplaced: string[];
+}
+
+/**
+ * Normalize puzzle words: uppercase A-Z only, no blanks or duplicates
+ */
+export function normalizeWords(words: string[]): string[] {
+  const normalized = words
+    .map((w) => w.normalize('NFD').replace(/[^A-Za-z]/g, '').toUpperCase())
+    .filter(Boolean);
+  return [...new Set(normalized)];
+}
+
+const DIRECTIONS: [number, number][] = [
+  [0, 1], // horizontal
+  [1, 0], // vertical
+  [1, 1], // diagonal down-right
+  [1, -1], // diagonal down-left
+];
+
 /**
  * Word search puzzle generator
  */
@@ -46,38 +76,46 @@ export function generateWordSearch(
   seed: string,
   width: number = 10,
   height: number = 10
-): { grid: string[][], solution: { word: string; start: [number, number]; end: [number, number] }[] } {
+): WordSearchResult {
   const rng = new SeededRandom(seed);
   const grid: string[][] = Array(height).fill(null).map(() => Array(width).fill(''));
-  const solution: { word: string; start: [number, number]; end: [number, number] }[] = [];
+  const solution: WordSearchPlacement[] = [];
+  const unplaced: string[] = [];
 
-  const directions: [number, number][] = [
-    [0, 1], // horizontal
-    [1, 0], // vertical
-    [1, 1], // diagonal down-right
-    [1, -1], // diagonal down-left
-  ];
+  // Longest words first: they are the hardest to fit
+  const ordered = normalizeWords(words).sort((a, b) => b.length - a.length);
 
-  for (const word of words) {
+  for (const word of ordered) {
+    const place = (row: number, col: number, dir: [number, number]) => {
+      if (!canPlaceWord(grid, word, row, col, dir, width, height)) return false;
+      placeWord(grid, word, row, col, dir);
+      solution.push({
+        word,
+        start: [row, col],
+        end: [row + dir[0] * (word.length - 1), col + dir[1] * (word.length - 1)],
+      });
+      return true;
+    };
+
     let placed = false;
-    let attempts = 0;
-
-    while (!placed && attempts < 100) {
-      const dir = directions[rng.nextInt(0, directions.length - 1)];
-      const startRow = rng.nextInt(0, height - 1);
-      const startCol = rng.nextInt(0, width - 1);
-
-      if (canPlaceWord(grid, word, startRow, startCol, dir, width, height)) {
-        placeWord(grid, word, startRow, startCol, dir);
-        solution.push({
-          word,
-          start: [startRow, startCol],
-          end: [startRow + dir[0] * (word.length - 1), startCol + dir[1] * (word.length - 1)],
-        });
-        placed = true;
-      }
-      attempts++;
+    for (let attempt = 0; attempt < 100 && !placed; attempt++) {
+      placed = place(
+        rng.nextInt(0, height - 1),
+        rng.nextInt(0, width - 1),
+        DIRECTIONS[rng.nextInt(0, DIRECTIONS.length - 1)]
+      );
     }
+
+    // Random attempts failed: try every position, in a seeded order
+    if (!placed) {
+      const candidates: [number, number, [number, number]][] = [];
+      for (let r = 0; r < height; r++)
+        for (let c = 0; c < width; c++)
+          for (const dir of DIRECTIONS) candidates.push([r, c, dir]);
+      placed = rng.shuffle(candidates).some(([r, c, dir]) => place(r, c, dir));
+    }
+
+    if (!placed) unplaced.push(word);
   }
 
   // Fill empty cells with random letters
@@ -90,7 +128,7 @@ export function generateWordSearch(
     }
   }
 
-  return { grid, solution };
+  return { grid, solution, unplaced };
 }
 
 function canPlaceWord(

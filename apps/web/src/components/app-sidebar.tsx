@@ -1,11 +1,12 @@
 "use client"
 
 import * as React from "react"
+import { Suspense } from "react"
 import Link from "next/link"
 import { BookOpenIcon } from "lucide-react"
 
 import { appNavMain, appNavSecondary } from "@/components/app-nav"
-import { NavMain } from "@/components/nav-main"
+import { NavMain, NavMainList } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import {
   Sidebar,
@@ -44,7 +45,10 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={appNavMain} />
+        {/* Reading the URL suspends on dynamic routes; show the nav unhighlighted meanwhile */}
+        <Suspense fallback={<NavMainList items={appNavMain} pathname={null} />}>
+          <NavMain items={appNavMain} />
+        </Suspense>
         <NavSecondary items={appNavSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>{user}</SidebarFooter>

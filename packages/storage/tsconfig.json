@@ -1,8 +1,8 @@
 {
   "extends": "../../base-tsconfig.json",
   "compilerOptions": {
-    "declaration": true,
-    "outDir": "./dist"
+    "module": "esnext",
+    "noEmit": true
   },
   "include": [
     "**/*.ts"

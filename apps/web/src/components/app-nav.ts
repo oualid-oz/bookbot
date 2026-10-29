@@ -1,4 +1,4 @@
-import { CreditCardIcon, PaletteIcon, SearchIcon, type LucideIcon } from "lucide-react"
+import { CreditCardIcon, LibraryBigIcon, SearchIcon, type LucideIcon } from "lucide-react"
 
 export interface AppNavItem {
   title: string
@@ -10,7 +10,7 @@ export interface AppNavItem {
 // Primary navigation for the signed-in app (pages under app/(app))
 export const appNavMain: AppNavItem[] = [
   { title: "Research", url: "/research", icon: SearchIcon },
-  { title: "Studio", url: "/studio", icon: PaletteIcon },
+  { title: "Projects", url: "/projects", icon: LibraryBigIcon },
 ]
 
 export const appNavSecondary: AppNavItem[] = [

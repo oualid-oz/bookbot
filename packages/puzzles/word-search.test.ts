@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateWordSearch } from './word-search';
+import { generateWordSearch, normalizeWords } from './word-search';
 
 describe('generateWordSearch', () => {
   const words = ['CAT', 'DOG', 'BIRD', 'FISH'];
@@ -37,5 +37,36 @@ describe('generateWordSearch', () => {
       const letters = [...word].map((_, i) => grid[start[0] + dr * i][start[1] + dc * i]);
       expect(letters.join('')).toBe(word);
     }
+  });
+
+  it('should place every word that fits and report none unplaced', () => {
+    const { solution, unplaced } = generateWordSearch(words, 'seed-1');
+    expect(unplaced).toEqual([]);
+    expect(solution.map((s) => s.word).sort()).toEqual([...words].sort());
+  });
+
+  it('should report words that are too long for the grid', () => {
+    const { solution, unplaced } = generateWordSearch(['CAT', 'HIPPOPOTAMUS'], 'seed-1', 8, 8);
+    expect(unplaced).toEqual(['HIPPOPOTAMUS']);
+    expect(solution.map((s) => s.word)).toEqual(['CAT']);
+  });
+
+  it('should report words that do not fit once the grid is full', () => {
+    // 9 three-letter words with no shared letters can't all fit in a 3x3 grid
+    const many = ['ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PQR', 'STU', 'VWX', 'YZA'];
+    const { solution, unplaced } = generateWordSearch(many, 'seed-1', 3, 3);
+    expect(solution.length + unplaced.length).toBe(many.length);
+    expect(unplaced.length).toBeGreaterThan(0);
+  });
+});
+
+describe('normalizeWords', () => {
+  it('should uppercase, strip non-letters and accents, and dedupe', () => {
+    expect(normalizeWords(['cat', ' Dog ', 'ice-cream', 'Café', 'CAT', '123', ''])).toEqual([
+      'CAT',
+      'DOG',
+      'ICECREAM',
+      'CAFE',
+    ]);
   });
 });

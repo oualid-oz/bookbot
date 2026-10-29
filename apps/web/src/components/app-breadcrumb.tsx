@@ -12,8 +12,12 @@ import {
 } from "@/components/ui/breadcrumb"
 
 export function AppBreadcrumb() {
-  const pathname = usePathname()
-  const section = [...appNavMain, ...appNavSecondary].find((item) => isNavActive(pathname, item.url))
+  return <AppBreadcrumbTrail pathname={usePathname()} />
+}
+
+/** Breadcrumb without URL access; pathname=null shows just the app name */
+export function AppBreadcrumbTrail({ pathname }: { pathname: string | null }) {
+  const section = pathname && [...appNavMain, ...appNavSecondary].find((item) => isNavActive(pathname, item.url))
 
   return (
     <Breadcrumb>

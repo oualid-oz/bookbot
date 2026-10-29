@@ -18,7 +18,8 @@ COPY packages/shared packages/shared
 COPY packages/storage packages/storage
 COPY apps/worker apps/worker
 
-# Local storage driver writes here; mount a volume shared with the web app
+# Use STORAGE_DRIVER=r2 (or s3) in production. With the local driver, mount
+# a volume shared with the web app here.
 ENV STORAGE_LOCAL_DIR=/app/.data/storage
 
 WORKDIR /app/apps/worker
