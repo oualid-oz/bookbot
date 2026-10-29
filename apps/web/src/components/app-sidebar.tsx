@@ -16,6 +16,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar"
 
 export function AppSidebar({
@@ -25,8 +26,10 @@ export function AppSidebar({
   /** Rendered in the footer; streamed from the server since it reads the session */
   user: React.ReactNode
 }) {
+  const { isMobile } = useSidebar()
+
   return (
-    <Sidebar variant="inset" {...props}>
+    <Sidebar variant="inset" collapsible={isMobile ? "offcanvas" : "icon"} {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>

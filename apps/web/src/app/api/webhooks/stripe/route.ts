@@ -1,91 +1,55 @@
-import { headers } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { stripe } from '@/server/stripe';
-import { db } from '@bookbot/db';
-import { organizations, subscriptions } from '@bookbot/db/schema';
-import { eq } from 'drizzle-orm';
-import { isUuid } from '@/server/org-access';
+import type Stripe from 'stripe';
+import { syncSubscription } from '@/server/billing';
+import { getStripe } from '@/server/stripe';
 
 export async function POST(req: Request) {
-  const body = await req.text();
-  const signature = (await headers()).get('stripe-signature')!;
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  const signature = req.headers.get('stripe-signature');
+  if (!secret || !process.env.STRIPE_SECRET_KEY) {
+    return NextResponse.json({ error: 'Billing is not configured' }, { status: 503 });
+  }
+  if (!signature) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+  }
 
-  let event;
-
+  let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
-  } catch (err) {
-    return NextResponse.json(
-      { error: 'Invalid signature' },
-      { status: 400 }
-    );
+    event = getStripe().webhooks.constructEvent(await req.text(), signature, secret);
+  } catch {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
   switch (event.type) {
     case 'checkout.session.completed': {
-      const session = event.data.object as any;
-      const customerId = session.customer;
-      const subscriptionId = session.subscription;
-
-      const orgId = session.metadata?.orgId;
-
-      // Checkout sessions must be created with metadata.orgId. Acknowledge bad
-      // events instead of failing, since Stripe would retry them for days.
-      const [org] = isUuid(orgId)
-        ? await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, orgId)).limit(1)
-        : [];
-      if (!org) {
-        console.error(`Stripe checkout ${session.id} has missing or unknown metadata.orgId`);
-        break;
-      }
-
-      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-      const values = {
-        stripeCustomerId: customerId,
-        stripePriceId: subscription.items.data[0].price.id,
-        status: subscription.status as any,
-        cancelAtPeriodEnd: subscription.cancel_at_period_end,
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-      };
-
-      // Stripe can deliver the same event more than once
-      await db
-        .insert(subscriptions)
-        .values({ orgId: org.id, stripeSubscriptionId: subscriptionId, ...values })
-        .onConflictDoUpdate({
-          target: subscriptions.stripeSubscriptionId,
-          set: { ...values, updatedAt: new Date() },
-        });
-
+      const session = event.data.object;
+      if (session.mode !== 'subscription' || !session.subscription) break;
+      // The session only carries the subscription ID; fetch the full object
+      const subscriptionId = typeof session.subscription === 'string' ? session.subscription : session.subscription.id;
+      const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+      await logSync(event, subscription);
       break;
     }
 
+    case 'customer.subscription.created':
     case 'customer.subscription.updated':
-    case 'customer.subscription.deleted': {
-      const subscription = event.data.object as any;
-
-      await db
-        .update(subscriptions)
-        .set({
-          status: subscription.status as any,
-          cancelAtPeriodEnd: subscription.cancel_at_period_end,
-          currentPeriodStart: new Date(subscription.current_period_start * 1000),
-          currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-          updatedAt: new Date(),
-        })
-        .where(eq(subscriptions.stripeSubscriptionId, subscription.id));
-
+    case 'customer.subscription.deleted':
+      await logSync(event, event.data.object);
       break;
-    }
 
     default:
-      console.log(`Unhandled event type: ${event.type}`);
+      console.log(`Unhandled Stripe event type: ${event.type}`);
   }
 
+  // Acknowledge everything we didn't fail on, so Stripe doesn't retry for days
   return NextResponse.json({ received: true });
+}
+
+async function logSync(event: Stripe.Event, subscription: Stripe.Subscription) {
+  const result = await syncSubscription(subscription, event.created);
+  if (result === 'no-org') {
+    console.error(`Stripe ${event.type} ${event.id}: no organization for subscription ${subscription.id}`);
+  } else if (result === 'stale') {
+    console.log(`Stripe ${event.type} ${event.id}: older than the stored state, ignored`);
+  }
 }

@@ -89,7 +89,7 @@ export function NavUser({ user }: NavUserProps) {
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <Link href="/pricing">
+                <Link href="/settings/billing">
                   <SparklesIcon />
                   Upgrade plan
                 </Link>

@@ -52,6 +52,8 @@ export const organizations = pgTable('organizations', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
   slug: varchar('slug', { length: 100 }).notNull().unique(),
+  // One Stripe customer per organization, created on first checkout
+  stripeCustomerId: varchar('stripe_customer_id', { length: 255 }).unique(),
   createdAt: timestamp('createdAt').defaultNow().notNull(),
   updatedAt: timestamp('updatedAt').defaultNow().notNull(),
 });
@@ -75,10 +77,15 @@ export const subscriptions = pgTable('subscriptions', {
   stripeSubscriptionId: varchar('stripe_subscription_id', { length: 255 }).unique(),
   stripeCustomerId: varchar('stripe_customer_id', { length: 255 }),
   stripePriceId: varchar('stripe_price_id', { length: 255 }),
-  status: varchar('status', { length: 50, enum: ['active', 'trialing', 'past_due', 'canceled', 'unpaid'] }).notNull(),
+  status: varchar('status', {
+    length: 50,
+    enum: ['active', 'trialing', 'past_due', 'canceled', 'unpaid', 'incomplete', 'incomplete_expired', 'paused'],
+  }).notNull(),
   cancelAtPeriodEnd: boolean('cancel_at_period_end').default(false).notNull(),
   currentPeriodStart: timestamp('current_period_start'),
   currentPeriodEnd: timestamp('current_period_end'),
+  // `created` of the last Stripe event applied, so older events arriving late are ignored
+  stripeEventAt: timestamp('stripe_event_at', { withTimezone: true }),
   createdAt: timestamp('createdAt').defaultNow().notNull(),
   updatedAt: timestamp('updatedAt').defaultNow().notNull(),
 }, (table) => ({

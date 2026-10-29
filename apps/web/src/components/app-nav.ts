@@ -14,7 +14,7 @@ export const appNavMain: AppNavItem[] = [
 ]
 
 export const appNavSecondary: AppNavItem[] = [
-  { title: "Pricing", url: "/pricing", icon: CreditCardIcon },
+  { title: "Billing", url: "/settings/billing", icon: CreditCardIcon },
 ]
 
 export function isNavActive(pathname: string, url: string) {

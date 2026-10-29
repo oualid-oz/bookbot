@@ -56,7 +56,10 @@ export default function PricingPage() {
               </CardContent>
               <CardFooter>
                 <Button className="w-full" variant={plan === 'pro' ? 'default' : 'outline'} asChild>
-                  <Link href="/signup">Get started</Link>
+                  {/* Paid plans upgrade from billing (sign-in first if needed) */}
+                  <Link href={plan === 'free' ? '/signup' : '/settings/billing'}>
+                    {plan === 'free' ? 'Get started' : `Upgrade to ${plan === 'pro' ? 'Pro' : 'Enterprise'}`}
+                  </Link>
                 </Button>
               </CardFooter>
             </Card>

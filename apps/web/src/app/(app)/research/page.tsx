@@ -79,7 +79,7 @@ export default function ResearchPage() {
               className="flex-1"
             />
             <Select value={marketplace} onValueChange={setMarketplace}>
-              <SelectTrigger aria-label="Marketplace" className="sm:w-24">
+              <SelectTrigger aria-label="Marketplace" className="sm:w-24 w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
