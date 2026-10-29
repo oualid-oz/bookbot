@@ -4,7 +4,7 @@ import GoogleProvider, { type GoogleProfile } from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { getPasswordUser, provisionUser } from './users';
 import { verifyAgainstDummy, verifyPassword } from '@/lib/password';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
 const providers: Provider[] = [
   CredentialsProvider({
@@ -14,13 +14,19 @@ const providers: Provider[] = [
       email: { label: 'Email', type: 'email' },
       password: { label: 'Password', type: 'password' },
     },
-    async authorize(credentials) {
+    async authorize(credentials, req) {
       const email = credentials?.email?.trim().toLowerCase();
       const password = credentials?.password;
       if (!email || !password) return null;
 
-      // 10 attempts per 15 minutes per email
-      if (!checkRateLimit(`login:${email}`, 10, 15 * 60 * 1000).allowed) return null;
+      // Per email (guessing one account) and per IP (trying many accounts)
+      const window = 15 * 60 * 1000;
+      const ip = getClientIp(new Headers(req.headers as Record<string, string>));
+      const [byEmail, byIp] = await Promise.all([
+        checkRateLimit(`login:${email}`, 10, window),
+        checkRateLimit(`login-ip:${ip}`, 50, window),
+      ]);
+      if (!byEmail.allowed || !byIp.allowed) return null;
 
       const user = await getPasswordUser(email);
       if (!user?.passwordHash) {

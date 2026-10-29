@@ -1,6 +1,7 @@
-import { eq, and, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '@bookbot/db';
-import { subscriptions, entitlementsUsage, organizations } from '@bookbot/db/schema';
+import { subscriptions, entitlementsUsage } from '@bookbot/db/schema';
+import { usagePeriodEnd, usagePeriodStart, type UsagePeriod } from '@bookbot/core';
 
 // Plan limits configuration
 export const PLAN_LIMITS = {
@@ -24,116 +25,117 @@ export const PLAN_LIMITS = {
   },
 } as const;
 
-/**
- * Get organization's subscription plan
- */
-export async function getOrgPlan(orgId: string) {
-  const subscription = await db
-    .select()
-    .from(subscriptions)
-    .where(eq(subscriptions.orgId, orgId))
-    .limit(1);
+export type Plan = keyof typeof PLAN_LIMITS;
 
-  if (!subscription[0] || subscription[0].status === 'canceled') {
-    return 'free';
-  }
+/** Metrics counted per period. (Projects are a standing count, checked directly.) */
+export type UsageMetric = 'exportsPerMonth' | 'aiCredits' | 'keywordLookupsPerDay';
 
-  // Determine plan from Stripe price ID
-  const priceId = subscription[0].stripePriceId;
-  if (priceId === process.env.STRIPE_PRICE_ID_PRO) return 'pro';
-  if (priceId === process.env.STRIPE_PRICE_ID_ENTERPRISE) return 'enterprise';
+const METRIC_PERIOD: Record<UsageMetric, UsagePeriod> = {
+  exportsPerMonth: 'monthly',
+  aiCredits: 'monthly',
+  keywordLookupsPerDay: 'daily',
+};
+
+/** Subscription statuses that grant the paid plan */
+const PAID_STATUSES = ['active', 'trialing'] as const;
+const PLAN_RANK: Record<Plan, number> = { free: 0, pro: 1, enterprise: 2 };
+
+function planForPrice(priceId: string | null): Plan {
+  if (priceId && priceId === process.env.STRIPE_PRICE_ID_ENTERPRISE) return 'enterprise';
+  if (priceId && priceId === process.env.STRIPE_PRICE_ID_PRO) return 'pro';
   return 'free';
 }
 
 /**
- * Check if organization has entitlement for a metric
- * Returns true if within limits, false if exceeded
+ * Organization's current plan: the best plan among its active or trialing
+ * subscriptions. Past-due, unpaid, and canceled subscriptions fall back to free.
  */
-export async function checkEntitlement(
-  orgId: string,
-  metric: 'exportsPerMonth' | 'aiCredits' | 'keywordLookupsPerDay' | 'projects'
-): Promise<{ allowed: boolean; used: number; limit: number }> {
-  const plan = await getOrgPlan(orgId);
-  const limit = PLAN_LIMITS[plan][metric];
+export async function getOrgPlan(orgId: string): Promise<Plan> {
+  const active = await db
+    .select({ priceId: subscriptions.stripePriceId })
+    .from(subscriptions)
+    .where(and(eq(subscriptions.orgId, orgId), inArray(subscriptions.status, [...PAID_STATUSES])));
 
-  // Unlimited
-  if (limit === -1) {
-    return { allowed: true, used: 0, limit: -1 };
+  return active
+    .map((s) => planForPrice(s.priceId))
+    .reduce<Plan>((best, plan) => (PLAN_RANK[plan] > PLAN_RANK[best] ? plan : best), 'free');
+}
+
+export interface UsageResult {
+  allowed: boolean;
+  used: number;
+  /** -1 means unlimited */
+  limit: number;
+  resetsAt: Date;
+}
+
+function usageKey(orgId: string, metric: UsageMetric, now = new Date()) {
+  const period = METRIC_PERIOD[metric];
+  return { orgId, metric, period, periodStart: usagePeriodStart(period, now), resetsAt: usagePeriodEnd(period, now) };
+}
+
+const sameUsageRow = (key: ReturnType<typeof usageKey>) =>
+  and(
+    eq(entitlementsUsage.orgId, key.orgId),
+    eq(entitlementsUsage.metric, key.metric),
+    eq(entitlementsUsage.period, key.period),
+    eq(entitlementsUsage.periodStart, key.periodStart)
+  );
+
+/**
+ * Atomically use `amount` of a metric if it stays within the plan limit.
+ *
+ * The check and the increment are one SQL statement, so concurrent requests
+ * can't both slip under the limit. Call releaseUsage() if the action fails
+ * after usage was consumed.
+ */
+export async function consumeUsage(orgId: string, metric: UsageMetric, amount = 1): Promise<UsageResult> {
+  const limit = PLAN_LIMITS[await getOrgPlan(orgId)][metric];
+  const key = usageKey(orgId, metric);
+  const { resetsAt, ...row } = key;
+
+  if (limit !== -1 && amount > limit) {
+    return { allowed: false, used: await getUsed(key), limit, resetsAt };
   }
 
-  // Calculate period start
-  const now = new Date();
-  const periodStart = metric === 'keywordLookupsPerDay'
-    ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    : new Date(now.getFullYear(), now.getMonth(), 1);
+  const updated = await db
+    .insert(entitlementsUsage)
+    .values({ ...row, count: amount })
+    .onConflictDoUpdate({
+      target: [entitlementsUsage.orgId, entitlementsUsage.metric, entitlementsUsage.period, entitlementsUsage.periodStart],
+      set: { count: sql`${entitlementsUsage.count} + ${amount}`, updatedAt: new Date() },
+      // Only increment while it stays within the limit; otherwise no row comes back
+      setWhere: limit === -1 ? undefined : sql`${entitlementsUsage.count} + ${amount} <= ${limit}`,
+    })
+    .returning({ count: entitlementsUsage.count });
 
-  const period = metric === 'keywordLookupsPerDay' ? 'daily' : 'monthly';
-
-  // Get current usage
-  const usage = await db
-    .select({ count: entitlementsUsage.count })
-    .from(entitlementsUsage)
-    .where(
-      and(
-        eq(entitlementsUsage.orgId, orgId),
-        eq(entitlementsUsage.metric, metric),
-        eq(entitlementsUsage.period, period),
-        eq(entitlementsUsage.periodStart, periodStart)
-      )
-    )
-    .limit(1);
-
-  const used = usage[0]?.count || 0;
-  const allowed = used < limit;
-
-  return { allowed, used, limit };
+  if (updated.length === 0) {
+    return { allowed: false, used: await getUsed(key), limit, resetsAt };
+  }
+  return { allowed: true, used: updated[0].count, limit, resetsAt };
 }
 
 /**
- * Increment usage for a metric
+ * Give back usage consumed for an action that didn't happen
  */
-export async function incrementUsage(
-  orgId: string,
-  metric: 'exportsPerMonth' | 'aiCredits' | 'keywordLookupsPerDay' | 'projects'
-) {
-  const now = new Date();
-  const periodStart = metric === 'keywordLookupsPerDay'
-    ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    : new Date(now.getFullYear(), now.getMonth(), 1);
+export async function releaseUsage(orgId: string, metric: UsageMetric, amount = 1) {
+  await db
+    .update(entitlementsUsage)
+    .set({ count: sql`greatest(${entitlementsUsage.count} - ${amount}, 0)`, updatedAt: new Date() })
+    .where(sameUsageRow(usageKey(orgId, metric)));
+}
 
-  const period = metric === 'keywordLookupsPerDay' ? 'daily' : 'monthly';
+/**
+ * Current usage without consuming any
+ */
+export async function getUsage(orgId: string, metric: UsageMetric): Promise<UsageResult> {
+  const limit = PLAN_LIMITS[await getOrgPlan(orgId)][metric];
+  const key = usageKey(orgId, metric);
+  const used = await getUsed(key);
+  return { allowed: limit === -1 || used < limit, used, limit, resetsAt: key.resetsAt };
+}
 
-  // Check if usage record exists
-  const existing = await db
-    .select()
-    .from(entitlementsUsage)
-    .where(
-      and(
-        eq(entitlementsUsage.orgId, orgId),
-        eq(entitlementsUsage.metric, metric),
-        eq(entitlementsUsage.period, period),
-        eq(entitlementsUsage.periodStart, periodStart)
-      )
-    )
-    .limit(1);
-
-  if (existing[0]) {
-    // Update existing
-    await db
-      .update(entitlementsUsage)
-      .set({
-        count: sql`${entitlementsUsage.count} + 1`,
-        updatedAt: new Date(),
-      })
-      .where(eq(entitlementsUsage.id, existing[0].id));
-  } else {
-    // Create new
-    await db.insert(entitlementsUsage).values({
-      orgId,
-      metric,
-      period,
-      periodStart,
-      count: 1,
-    });
-  }
+async function getUsed(key: ReturnType<typeof usageKey>): Promise<number> {
+  const [row] = await db.select({ count: entitlementsUsage.count }).from(entitlementsUsage).where(sameUsageRow(key)).limit(1);
+  return row?.count ?? 0;
 }

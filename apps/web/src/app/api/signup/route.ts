@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { signupSchema } from '@bookbot/shared';
 import { hashPassword } from '@/lib/password';
-import { checkRateLimit } from '@/lib/rate-limit';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { createPasswordUser } from '@/server/users';
 
 export async function POST(req: NextRequest) {
   // 5 sign-ups per hour per IP
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
-  const rateLimit = checkRateLimit(`signup:${ip}`, 5, 60 * 60 * 1000);
+  const rateLimit = await checkRateLimit(`signup:${getClientIp(req.headers)}`, 5, 60 * 60 * 1000);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: 'Too many sign-up attempts. Try again later.' },

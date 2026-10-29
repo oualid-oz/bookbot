@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { and, eq } from 'drizzle-orm';
 import { db, exports, projects } from '@bookbot/db';
 import { exportRequestSchema } from '@bookbot/shared';
-import { checkEntitlement, incrementUsage } from '@/lib/entitlements';
+import { consumeUsage, releaseUsage } from '@/lib/entitlements';
 import { errorResponse, isUuid, readJson, requireOrgAccess, requireUser } from '@/server/org-access';
 import { addExportJob } from '@/server/queue';
 
@@ -27,38 +27,40 @@ export async function POST(req: NextRequest) {
     return errorResponse(404, 'Project not found');
   }
 
-  // Check entitlement
-  const entitlement = await checkEntitlement(orgId, 'exportsPerMonth');
-  if (!entitlement.allowed) {
-    return errorResponse(429, 'Export limit exceeded', { limit: entitlement.limit, used: entitlement.used });
+  // Reserve the export against the plan limit before doing any work
+  const usage = await consumeUsage(orgId, 'exportsPerMonth');
+  if (!usage.allowed) {
+    return errorResponse(429, 'Export limit exceeded', {
+      limit: usage.limit,
+      used: usage.used,
+      resetsAt: usage.resetsAt,
+    });
   }
 
-  // Create export record
-  const [exportRecord] = await db
-    .insert(exports)
-    .values({
-      projectId,
-      status: 'pending',
-      spec,
-    })
-    .returning();
-
+  let exportId: string | undefined;
   try {
-    await addExportJob(exportRecord.id);
+    const [exportRecord] = await db
+      .insert(exports)
+      .values({ projectId, status: 'pending', spec })
+      .returning({ id: exports.id });
+    exportId = exportRecord.id;
+
+    await addExportJob(exportId);
   } catch (err) {
-    console.error(`Failed to queue export ${exportRecord.id}:`, err);
-    await db
-      .update(exports)
-      .set({ status: 'failed', errorMessage: 'Could not queue export', updatedAt: new Date() })
-      .where(eq(exports.id, exportRecord.id));
+    console.error(`Failed to create export${exportId ? ` ${exportId}` : ''}:`, err);
+    // Nothing was queued: give the reserved export back
+    await releaseUsage(orgId, 'exportsPerMonth');
+    if (exportId) {
+      await db
+        .update(exports)
+        .set({ status: 'failed', errorMessage: 'Could not queue export', updatedAt: new Date() })
+        .where(eq(exports.id, exportId));
+    }
     return errorResponse(503, 'Export service unavailable, please try again');
   }
 
-  // Only count exports that were actually queued
-  await incrementUsage(orgId, 'exportsPerMonth');
-
   return NextResponse.json({
-    exportId: exportRecord.id,
+    exportId,
     status: 'pending',
   });
 }

@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Rate limit: 100 requests per minute per org
-  const rateLimit = checkRateLimit(`ext:${decoded.orgId}`, 100, 60000);
+  const rateLimit = await checkRateLimit(`ext:${decoded.orgId}`, 100, 60000);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: 'Rate limit exceeded', resetTime: rateLimit.resetTime },
