@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Loader2Icon } from 'lucide-react';
 import { toast } from 'sonner';
 import { MAX_PAGE_COUNT, MIN_PAGE_COUNT } from '@bookbot/shared';
@@ -12,12 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ApiError, apiFetch } from '@/lib/api-client';
 import { PAPER_LABELS, TRIM_OPTIONS, type ProjectSummary } from '@/components/project-options';
 
+/** Remount with a new `key` when the project changes, to reset the form */
 export function DetailsCard({ project, onSaved }: { project: ProjectSummary; onSaved: (p: ProjectSummary) => void }) {
   const [values, setValues] = useState(project);
   const [errors, setErrors] = useState<Record<string, string[] | undefined>>({});
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => setValues(project), [project]);
 
   const set = <K extends keyof ProjectSummary>(key: K, value: ProjectSummary[K]) => setValues((v) => ({ ...v, [key]: value }));
   const dirty = (['title', 'subtitle', 'trimSize', 'pageCount', 'paper'] as const).some((k) => (values[k] ?? '') !== (project[k] ?? ''));

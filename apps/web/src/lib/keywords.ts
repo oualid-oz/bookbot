@@ -68,7 +68,7 @@ export async function saveNicheSnapshot(
   orgId: string,
   keyword: string,
   marketplace: Marketplace,
-  topResults: any[],
+  topResults: Record<string, unknown>[],
   score: number
 ) {
   await db.insert(nicheSnapshots).values({

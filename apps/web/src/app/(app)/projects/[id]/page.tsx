@@ -104,7 +104,7 @@ export default function ProjectPage() {
 
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-2">
-          <DetailsCard project={project} onSaved={setProject} />
+          <DetailsCard key={project.updatedAt} project={project} onSaved={setProject} />
         </div>
         <div className="flex flex-col gap-6 lg:col-span-3">
           <ExportsCard projectId={project.id} />

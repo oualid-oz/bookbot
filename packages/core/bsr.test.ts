@@ -4,7 +4,6 @@ import {
   estimateMonthlySalesFromBSR,
   estimateBSRFromSales,
   getBSRCurve,
-  DEFAULT_BSR_CURVES,
 } from './bsr';
 
 describe('BSR Estimator', () => {
