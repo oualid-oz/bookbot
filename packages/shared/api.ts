@@ -60,3 +60,16 @@ export const assetUploadSchema = z.object({
   contentType: z.enum(IMAGE_TYPES, { errorMap: () => ({ message: 'Use a PNG or JPEG image' }) }),
   size: z.number().int().positive().max(MAX_IMAGE_BYTES, 'Images can be at most 25 MB'),
 });
+
+/** A book saved from an Amazon product page by the extension */
+export const saveBookSchema = z.object({
+  asin: z.string().regex(/^[A-Z0-9]{10}$/, 'Invalid ASIN'),
+  marketplace: marketplaceSchema,
+  title: z.string().trim().min(1).max(500),
+  category: z.string().trim().max(100).optional(),
+  bsr: z.number().int().positive().optional(),
+  price: z.number().nonnegative().max(100_000).optional(),
+  reviews: z.number().int().nonnegative().optional(),
+});
+
+export type SaveBookInput = z.infer<typeof saveBookSchema>;

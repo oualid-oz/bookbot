@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertCircleIcon, BookmarkIcon, Loader2Icon, SearchIcon } from 'lucide-react';
+import { AlertCircleIcon, Loader2Icon, SearchIcon } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MARKETPLACES } from '@bookbot/shared';
+import { SavedBooks } from './saved-books';
 
 
 interface KeywordResult {
@@ -129,18 +130,7 @@ export default function ResearchPage() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Saved niches</CardTitle>
-          <CardDescription>Niches you save will appear here.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-            <BookmarkIcon className="size-5" />
-            Use the Chrome extension to analyze Amazon results.
-          </div>
-        </CardContent>
-      </Card>
+      <SavedBooks />
     </div>
   );
 }

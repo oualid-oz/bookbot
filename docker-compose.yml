@@ -1,0 +1,87 @@
+# Production-style stack: Postgres, Redis, migrations, web app, and worker.
+#
+#   NEXTAUTH_SECRET=$(openssl rand -base64 32) NEXTAUTH_URL=http://localhost:3000 docker compose up -d --build
+#
+# Optional settings (Stripe, R2, Google, ...) are read from the environment or
+# an env file passed with --env-file; see .env.example.
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql://bookbot:${POSTGRES_PASSWORD:-bookbot}@postgres:5432/bookbot
+  REDIS_URL: redis://redis:6379/0
+  NEXTAUTH_URL: ${NEXTAUTH_URL:?Set NEXTAUTH_URL to the app's public URL}
+  NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET (openssl rand -base64 32)}
+  STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+  STORAGE_LOCAL_DIR: /data/storage
+  R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+  R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+  R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+  R2_BUCKET_NAME: ${R2_BUCKET_NAME:-}
+  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+  STRIPE_PRICE_ID_PRO: ${STRIPE_PRICE_ID_PRO:-}
+  STRIPE_PRICE_ID_ENTERPRISE: ${STRIPE_PRICE_ID_ENTERPRISE:-}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  EMAIL_TRANSPORT: ${EMAIL_TRANSPORT:-console}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: bookbot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bookbot}
+      POSTGRES_DB: bookbot
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bookbot']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    # BullMQ needs jobs to survive memory pressure
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Runs once per deploy; the app starts only after it succeeds
+  migrate:
+    build: { context: ., dockerfile: apps/worker/Dockerfile }
+    image: bookbot-worker
+    working_dir: /app
+    command: ['npm', 'run', 'db:migrate']
+    environment:
+      DATABASE_URL: postgresql://bookbot:${POSTGRES_PASSWORD:-bookbot}@postgres:5432/bookbot
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: 'no'
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    image: bookbot-web
+    environment: *app-env
+    ports: ['${WEB_PORT:-3000}:3000']
+    volumes: [storage:/data/storage]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  worker:
+    image: bookbot-worker
+    environment: *app-env
+    volumes: [storage:/data/storage]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  storage:

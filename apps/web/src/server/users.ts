@@ -123,6 +123,14 @@ export async function createPasswordUser(input: {
 }
 
 /**
+ * The user's current session version, or null if the user no longer exists
+ */
+export async function getSessionVersion(userId: string): Promise<number | null> {
+  const [user] = await db.select({ sessionVersion: users.sessionVersion }).from(users).where(eq(users.id, userId)).limit(1);
+  return user?.sessionVersion ?? null;
+}
+
+/**
  * Look up a user for password sign-in
  */
 export async function getPasswordUser(email: string) {

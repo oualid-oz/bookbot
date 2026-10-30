@@ -22,7 +22,7 @@ export const accounts = pgTable('accounts', {
 export const sessions = pgTable('sessions', {
   sessionToken: varchar('session_token', { length: 255 }).notNull().primaryKey(),
   userId: uuid('userId').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  expires: timestamp('expires', { mode: 'date' }).notNull(),
+  expires: timestamp('expires', { mode: 'date', withTimezone: true }).notNull(),
 }, (table) => ({
   userIdIdx: index('sessions_user_id_idx').on(table.userId),
 }));
@@ -30,7 +30,7 @@ export const sessions = pgTable('sessions', {
 export const verificationTokens = pgTable('verification_tokens', {
   identifier: varchar('identifier', { length: 255 }).notNull(),
   token: varchar('token', { length: 255 }).notNull(),
-  expires: timestamp('expires', { mode: 'date' }).notNull(),
+  expires: timestamp('expires', { mode: 'date', withTimezone: true }).notNull(),
 }, (table) => ({
   pk: primaryKey({ columns: [table.identifier, table.token] }),
 }));
@@ -40,11 +40,13 @@ export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
   email: varchar('email', { length: 255 }).notNull().unique(),
   name: varchar('name', { length: 255 }),
-  emailVerified: timestamp('emailVerified'),
+  emailVerified: timestamp('emailVerified', { withTimezone: true }),
   image: varchar('image', { length: 500 }),
   passwordHash: text('password_hash'), // null for OAuth-only users
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
-  updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  // Bumped to sign out every existing session (e.g. after a password reset)
+  sessionVersion: integer('session_version').notNull().default(0),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
 });
 
 // Organizations table
@@ -54,8 +56,8 @@ export const organizations = pgTable('organizations', {
   slug: varchar('slug', { length: 100 }).notNull().unique(),
   // One Stripe customer per organization, created on first checkout
   stripeCustomerId: varchar('stripe_customer_id', { length: 255 }).unique(),
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
-  updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
 });
 
 // Memberships table (users <-> organizations)
@@ -64,7 +66,7 @@ export const memberships = pgTable('memberships', {
   userId: uuid('userId').notNull().references(() => users.id, { onDelete: 'cascade' }),
   orgId: uuid('orgId').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   role: varchar('role', { length: 50, enum: ['owner', 'admin', 'member'] }).notNull().default('member'),
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   orgIdIdx: index('memberships_org_id_idx').on(table.orgId),
   uniqueMembership: uniqueIndex('memberships_user_org_unique').on(table.userId, table.orgId),
@@ -82,12 +84,12 @@ export const subscriptions = pgTable('subscriptions', {
     enum: ['active', 'trialing', 'past_due', 'canceled', 'unpaid', 'incomplete', 'incomplete_expired', 'paused'],
   }).notNull(),
   cancelAtPeriodEnd: boolean('cancel_at_period_end').default(false).notNull(),
-  currentPeriodStart: timestamp('current_period_start'),
-  currentPeriodEnd: timestamp('current_period_end'),
+  currentPeriodStart: timestamp('current_period_start', { withTimezone: true }),
+  currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
   // `created` of the last Stripe event applied, so older events arriving late are ignored
   stripeEventAt: timestamp('stripe_event_at', { withTimezone: true }),
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
-  updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   orgIdIdx: index('subscriptions_org_id_idx').on(table.orgId),
 }));
@@ -98,10 +100,10 @@ export const entitlementsUsage = pgTable('entitlements_usage', {
   orgId: uuid('orgId').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   metric: varchar('metric', { length: 100 }).notNull(), // e.g., 'exports_per_month', 'ai_credits', 'keyword_lookups_per_day'
   period: varchar('period', { length: 20, enum: ['daily', 'monthly'] }).notNull(),
-  periodStart: timestamp('period_start').notNull(),
+  periodStart: timestamp('period_start', { withTimezone: true }).notNull(),
   count: integer('count').notNull().default(0),
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
-  updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   orgMetricPeriodIdx: uniqueIndex('entitlements_org_metric_period_idx').on(table.orgId, table.metric, table.period, table.periodStart),
 }));
@@ -166,8 +168,8 @@ export const keywordCache = pgTable('keyword_cache', {
   marketplace: varchar('marketplace', { length: 10, enum: ['US', 'UK', 'DE', 'FR', 'ES', 'IT', 'JP'] }).notNull().default('US'),
   volume: integer('volume'),
   competition: decimal('competition', { precision: 5, scale: 2 }),
-  fetchedAt: timestamp('fetched_at').defaultNow().notNull(),
-  expiresAt: timestamp('expires_at').notNull(),
+  fetchedAt: timestamp('fetched_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 }, (table) => ({
   orgKeywordMarketIdx: uniqueIndex('keyword_cache_org_keyword_market_idx').on(table.orgId, table.keyword, table.marketplace),
   expiresAtIdx: index('keyword_cache_expires_at_idx').on(table.expiresAt),
@@ -181,7 +183,7 @@ export const nicheSnapshots = pgTable('niche_snapshots', {
   marketplace: varchar('marketplace', { length: 10, enum: ['US', 'UK', 'DE', 'FR', 'ES', 'IT', 'JP'] }).notNull().default('US'),
   topResults: jsonb('top_results').notNull(), // Top 20 results with ASIN, BSR, price, reviews
   score: decimal('score', { precision: 5, scale: 2 }),
-  fetchedAt: timestamp('fetched_at').defaultNow().notNull(),
+  fetchedAt: timestamp('fetched_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   orgKeywordIdx: index('niche_snapshots_org_keyword_idx').on(table.orgId, table.keyword),
 }));
@@ -192,8 +194,8 @@ export const bsrCurves = pgTable('bsr_curves', {
   category: varchar('category', { length: 255 }).notNull(),
   marketplace: varchar('marketplace', { length: 10, enum: ['US', 'UK', 'DE', 'FR', 'ES', 'IT', 'JP'] }).notNull().default('US'),
   params: jsonb('params').notNull(), // { a, b } for sales = a * BSR^(-b)
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
-  updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   categoryMarketIdx: uniqueIndex('bsr_curves_category_market_idx').on(table.category, table.marketplace),
 }));
@@ -204,8 +206,8 @@ export const savedNiches = pgTable('saved_niches', {
   orgId: uuid('orgId').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
   keyword: varchar('keyword', { length: 255 }).notNull(),
   notes: text('notes'),
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
-  updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   orgIdx: index('saved_niches_org_idx').on(table.orgId),
 }));
@@ -241,8 +243,8 @@ export const projects = pgTable('projects', {
   pageCount: integer('page_count').notNull(),
   paper: varchar('paper', { length: 50, enum: ['white', 'cream', 'color'] }).notNull().default('white'),
   status: varchar('status', { length: 50, enum: ['draft', 'exporting', 'completed', 'failed'] }).notNull().default('draft'),
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
-  updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   orgIdx: index('projects_org_idx').on(table.orgId),
 }));
@@ -254,8 +256,8 @@ export const projectDocs = pgTable('project_docs', {
   kind: varchar('kind', { length: 50, enum: ['cover', 'interior'] }).notNull(),
   jsonState: jsonb('json_state').notNull(),
   version: integer('version').notNull().default(1),
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
-  updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   projectKindIdx: uniqueIndex('project_docs_project_kind_idx').on(table.projectId, table.kind),
 }));
@@ -274,7 +276,7 @@ export const assets = pgTable('assets', {
   dpi: integer('dpi'),
   size: integer('size'), // bytes
   mimeType: varchar('mime_type', { length: 100 }),
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   orgIdx: index('assets_org_idx').on(table.orgId),
   r2KeyIdx: uniqueIndex('assets_r2_key_idx').on(table.r2Key),
@@ -288,9 +290,9 @@ export const exports = pgTable('exports', {
   r2Key: varchar('r2_key', { length: 500 }),
   spec: jsonb('spec').notNull(), // Export specifications (format, quality, etc.)
   errorMessage: text('error_message'),
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
-  updatedAt: timestamp('updatedAt').defaultNow().notNull(),
-  completedAt: timestamp('completedAt'),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp('completedAt', { withTimezone: true }),
 }, (table) => ({
   projectIdx: index('exports_project_idx').on(table.projectId),
   statusIdx: index('exports_status_idx').on(table.status),
@@ -304,7 +306,7 @@ export const puzzleSets = pgTable('puzzle_sets', {
   seed: varchar('seed', { length: 50 }).notNull(), // For deterministic generation
   params: jsonb('params').notNull(), // Difficulty, size, etc.
   content: jsonb('content').notNull(), // Generated puzzle + solution
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   projectIdx: index('puzzle_sets_project_idx').on(table.projectId),
 }));
@@ -319,9 +321,9 @@ export const aiGenerations = pgTable('ai_generations', {
   cost: decimal('cost', { precision: 10, scale: 4 }),
   resultRef: varchar('result_ref', { length: 500 }), // Reference to asset or text content
   errorMessage: text('error_message'),
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
-  updatedAt: timestamp('updatedAt').defaultNow().notNull(),
-  completedAt: timestamp('completedAt'),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp('completedAt', { withTimezone: true }),
 }, (table) => ({
   orgIdx: index('ai_generations_org_idx').on(table.orgId),
   statusIdx: index('ai_generations_status_idx').on(table.status),
@@ -335,8 +337,8 @@ export const listings = pgTable('listings', {
   subtitle: varchar('subtitle', { length: 255 }),
   description: text('description').notNull(),
   keywords: jsonb('keywords').notNull(), // Array of keywords
-  createdAt: timestamp('createdAt').defaultNow().notNull(),
-  updatedAt: timestamp('updatedAt').defaultNow().notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   projectIdx: uniqueIndex('listings_project_idx').on(table.projectId),
 }));
@@ -411,6 +413,38 @@ export const extensionTokens = pgTable('extension_tokens', {
   orgIdx: index('extension_tokens_org_idx').on(table.orgId),
 }));
 
+// Books saved from the Chrome extension, one per org, ASIN, and marketplace.
+// The latest values are copied here for listing; history is in bookSnapshots.
+export const trackedBooks = pgTable('tracked_books', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  orgId: uuid('orgId').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  asin: varchar('asin', { length: 10 }).notNull(),
+  marketplace: varchar('marketplace', { length: 10, enum: ['US', 'UK', 'DE', 'FR', 'ES', 'IT', 'JP'] }).notNull(),
+  title: varchar('title', { length: 500 }).notNull(),
+  category: varchar('category', { length: 100 }),
+  bsr: integer('bsr'),
+  price: decimal('price', { precision: 10, scale: 2 }),
+  reviews: integer('reviews'),
+  estimatedDailySales: integer('estimated_daily_sales'),
+  lastCheckedAt: timestamp('last_checked_at', { withTimezone: true }).defaultNow().notNull(),
+  createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  orgBookIdx: uniqueIndex('tracked_books_org_asin_market_idx').on(table.orgId, table.asin, table.marketplace),
+}));
+
+export const bookSnapshots = pgTable('book_snapshots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  bookId: uuid('book_id').notNull().references(() => trackedBooks.id, { onDelete: 'cascade' }),
+  bsr: integer('bsr'),
+  category: varchar('category', { length: 100 }),
+  price: decimal('price', { precision: 10, scale: 2 }),
+  reviews: integer('reviews'),
+  estimatedDailySales: integer('estimated_daily_sales'),
+  capturedAt: timestamp('captured_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  bookTimeIdx: index('book_snapshots_book_time_idx').on(table.bookId, table.capturedAt),
+}));
+
 // Update schema export
 export const schema = {
   users,
@@ -433,4 +467,6 @@ export const schema = {
   aiGenerations,
   listings,
   extensionTokens,
+  trackedBooks,
+  bookSnapshots,
 };

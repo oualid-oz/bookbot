@@ -1,6 +1,11 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Self-contained server for the Docker image; trace from the monorepo root
+  // so workspace packages are included (builds run from apps/web)
+  output: "standalone",
+  outputFileTracingRoot: path.resolve(process.cwd(), "../.."),
   /* config options here */
   experimental: {
     agentFeedback: true,

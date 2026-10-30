@@ -1,12 +1,6 @@
+import { extractProduct, type ProductInfo } from '../lib/extract';
 import type { Estimate, Request, Response } from '../lib/messages';
-import {
-  asinFromUrl,
-  marketplaceForHost,
-  parseBestSellersRank,
-  parsePrice,
-  parseReviewCount,
-  type Marketplace,
-} from '../lib/parse';
+import { marketplaceForHost, parsePrice, parseReviewCount } from '../lib/parse';
 
 const PANEL_CLASS = 'bookbot-spy-panel';
 
@@ -21,12 +15,11 @@ export default defineContentScript({
     '*://*.amazon.co.jp/*',
   ],
   main() {
-    const marketplace = marketplaceForHost(location.hostname);
-    if (!marketplace) return;
+    if (!marketplaceForHost(location.hostname)) return;
 
-    const asin = asinFromUrl(location.href);
-    if (asin) {
-      showProductPanel(asin, marketplace);
+    const product = extractProduct(document, location.href);
+    if (product) {
+      showProductPanel(product);
     } else {
       // Search results load and re-render dynamically
       annotateSearchResults();
@@ -40,35 +33,61 @@ function text(selector: string, root: ParentNode = document): string {
 }
 
 /** Product pages have the BSR, so they get the full estimate */
-function showProductPanel(asin: string, marketplace: Marketplace) {
+function showProductPanel(product: ProductInfo) {
   const anchor = document.querySelector('#title, #productTitle')?.closest('div');
   if (!anchor || document.querySelector(`.${PANEL_CLASS}`)) return;
 
-  const details = text('#detailBulletsWrapper_feature_div') || text('#productDetails_detailBullets_sections1') || text('#SalesRank');
-  const rank = parseBestSellersRank(details.replace(/\s+/g, ' '));
-  const price = parsePrice(text('#corePrice_feature_div .a-offscreen') || text('.a-price .a-offscreen'));
-  const reviews = parseReviewCount(text('#acrCustomerReviewText'));
-
+  const { asin, marketplace, title, rank, price, reviews } = product;
   const panel = createPanel();
   addRow(panel, 'BSR', rank ? `#${rank.rank.toLocaleString()} in ${rank.category}` : 'Not found');
   addRow(panel, 'Price', price !== null ? price.toFixed(2) : '—');
   addRow(panel, 'Reviews', reviews !== null ? reviews.toLocaleString() : '—');
   anchor.after(panel);
 
-  if (!rank) return;
-  const result = addRow(panel, 'Sales', 'Estimating…');
-  const message: Request = {
-    type: 'estimate',
-    payload: { asin, bsr: rank.rank, category: rank.category, marketplace, price: price ?? undefined, reviews: reviews ?? undefined },
-  };
-  browser.runtime.sendMessage(message).then((response: Response<Estimate>) => {
-    if (response.ok) {
-      result.textContent = `~${response.data.estimatedDailySales.toLocaleString()}/day · ~${response.data.estimatedMonthlySales.toLocaleString()}/month`;
-    } else {
-      result.textContent = response.error;
-      result.style.color = '#b91c1c';
-    }
+  if (rank) {
+    const result = addRow(panel, 'Sales', 'Estimating…');
+    send<Estimate>({
+      type: 'estimate',
+      payload: { asin, bsr: rank.rank, category: rank.category, marketplace, price: price ?? undefined, reviews: reviews ?? undefined },
+    }).then((response) => {
+      if (response.ok) {
+        result.textContent = `~${response.data.estimatedDailySales.toLocaleString()}/day · ~${response.data.estimatedMonthlySales.toLocaleString()}/month`;
+      } else {
+        result.textContent = response.error;
+        result.style.color = '#b91c1c';
+      }
+    });
+  }
+
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.textContent = 'Save to Bookbot';
+  save.style.cssText =
+    'margin-top:6px;padding:4px 10px;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#111827;font:12px system-ui,sans-serif;cursor:pointer';
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    save.textContent = 'Saving…';
+    const response = await send({
+      type: 'saveBook',
+      payload: {
+        asin,
+        marketplace,
+        title,
+        category: rank?.category,
+        bsr: rank?.rank,
+        price: price ?? undefined,
+        reviews: reviews ?? undefined,
+      },
+    });
+    save.disabled = false;
+    save.textContent = response.ok ? 'Saved ✓ (save again later to track changes)' : `Not saved: ${response.error}`;
+    save.style.color = response.ok ? '#047857' : '#b91c1c';
   });
+  panel.append(save);
+}
+
+function send<T>(message: Request): Promise<Response<T>> {
+  return browser.runtime.sendMessage(message);
 }
 
 /** Search cards don't include the BSR; show what they do have */

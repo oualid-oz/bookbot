@@ -18,7 +18,9 @@ async function handle(message: Request): Promise<Response> {
   const request =
     message.type === 'estimate'
       ? { path: '/api/ext/estimate', init: { method: 'POST', body: JSON.stringify(message.payload) } }
-      : { path: '/api/ext/me', init: { method: 'GET' } };
+      : message.type === 'saveBook'
+        ? { path: '/api/ext/books', init: { method: 'POST', body: JSON.stringify(message.payload) } }
+        : { path: '/api/ext/me', init: { method: 'GET' } };
 
   try {
     const res = await fetch(`${API_URL}${request.path}`, {

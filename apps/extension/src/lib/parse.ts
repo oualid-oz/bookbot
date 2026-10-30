@@ -34,6 +34,10 @@ const CATEGORY_ALIASES: Record<string, string> = {
   'kindleストア': 'Kindle Store',
 };
 
+/** "Best Sellers Rank" as each marketplace writes it */
+const BSR_LABEL =
+  /Best\s*Sellers\s*Rank|Bestseller-Rang|Classement des meilleures ventes d'Amazon|Clasificación en los más vendidos de Amazon|Posizione nella classifica Bestseller di Amazon|売れ筋ランキング/i;
+
 /** Digits only, so "12,345", "12.345", and "12 345" all read as 12345 */
 function parseCount(text: string): number | null {
   const digits = text.replace(/\D/g, '');
@@ -46,6 +50,11 @@ function parseCount(text: string): number | null {
  * "Amazon Bestseller-Rang: Nr. 12.345 in Bücher (Siehe Top 100 in Bücher)"
  */
 export function parseBestSellersRank(text: string): { rank: number; category: string } | null {
+  // Start at the rank's label when present, so numbers earlier in the product
+  // details (e.g. "2 in 1 edition") can't be mistaken for the rank
+  const label = text.match(BSR_LABEL);
+  if (label?.index !== undefined) text = text.slice(label.index + label[0].length);
+
   const match = text.match(/(?:#|Nr\.\s*|n\.\s*|nº\s*)?(\d[\d.,\s ]*)\s+(?:in|en|dans|-)\s+([^(\n#]+?)\s*(?:\(|\n|$|#)/i);
   if (!match) return null;
   const rank = parseCount(match[1]);

@@ -64,7 +64,7 @@ const defaultProvider: AIProvider = {
     // Placeholder - integrate with Anthropic/OpenAI
     return `Generated text for: ${prompt}`;
   },
-  async generateImage(prompt: string): Promise<string> {
+  async generateImage(): Promise<string> {
     // Placeholder - integrate with image generation API
     return 'https://example.com/generated-image.jpg';
   },

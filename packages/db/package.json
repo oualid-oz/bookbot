@@ -9,7 +9,8 @@
     "migrate": "tsx ../../node_modules/drizzle-kit/bin.cjs migrate",
     "push": "tsx ../../node_modules/drizzle-kit/bin.cjs push",
     "studio": "tsx ../../node_modules/drizzle-kit/bin.cjs studio",
-    "lint": "eslint"
+    "lint": "eslint",
+    "migrate:deploy": "tsx migrate.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.33.0",

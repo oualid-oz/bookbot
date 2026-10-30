@@ -26,6 +26,16 @@ describe('parseBestSellersRank', () => {
     expect(parseBestSellersRank('#42 in Toys & Games (See Top 100)')).toEqual({ rank: 42, category: 'Toys & Games' });
   });
 
+  it('ignores numbers before the rank label', () => {
+    const details = 'Edition: 2 in 1 Hardcover Print length: 320 pages Best Sellers Rank: 78 in Books (See Top 100 in Books) 3 in Self Help';
+    expect(parseBestSellersRank(details)).toEqual({ rank: 78, category: 'Books' });
+  });
+
+  it('reads French ranks', () => {
+    expect(parseBestSellersRank("Classement des meilleures ventes d'Amazon : 1 234 en Livres (Voir les 100 premiers en Livres)"))
+      .toEqual({ rank: 1234, category: 'Books' });
+  });
+
   it('returns null without a rank', () => {
     expect(parseBestSellersRank('Publisher: Independently published')).toBeNull();
   });

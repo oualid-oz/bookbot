@@ -9,6 +9,7 @@ import { POST as requestReset } from '@/app/api/account/password-reset/route';
 import { POST as confirmReset } from '@/app/api/account/password-reset/confirm/route';
 import { GET as account } from '@/app/api/account/route';
 import { verifyPassword } from '@/lib/password';
+import { authOptions } from '@/server/auth';
 import { sentEmails } from '@/server/email';
 import { getRedis } from '@/server/redis';
 import { json, request, resetDatabase, signInAs } from './helpers';
@@ -134,5 +135,38 @@ describe('password reset', () => {
     for (let i = 0; i < 5; i++) statuses.push((await reset('spammed@example.com', `198.51.100.${50 + i}`)).status);
     expect(statuses).toEqual([200, 200, 200, 200, 200]);
     expect(sentEmails).toHaveLength(3);
+  });
+});
+
+describe('sessions after a password reset', () => {
+  // The callback NextAuth runs on every session check
+  const checkSession = (token: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+    authOptions.callbacks!.jwt!({ token, ...extra } as never);
+
+  it('signs out sessions created before the reset', async () => {
+    const user = await createAccount('signed-in-elsewhere@example.com');
+    const oldSession = { id: user.id, sv: 0 };
+    await expect(checkSession(oldSession)).resolves.toMatchObject({ id: user.id });
+
+    await reset('signed-in-elsewhere@example.com');
+    await confirm(linkToken('signed-in-elsewhere@example.com', '/reset-password'), 'brand new password');
+
+    await expect(checkSession(oldSession)).rejects.toThrow('Session revoked');
+
+    // Signing in again issues a session for the new version
+    const fresh = await checkSession({}, { user: { id: user.id }, account: { provider: 'password' } });
+    expect(fresh.sv).toBe(1);
+    await expect(checkSession(fresh)).resolves.toMatchObject({ id: user.id, sv: 1 });
+  });
+
+  it('keeps sessions from before session versions existed', async () => {
+    const user = await createAccount('legacy-session@example.com');
+    await expect(checkSession({ id: user.id })).resolves.toMatchObject({ id: user.id });
+  });
+
+  it('rejects sessions of deleted users', async () => {
+    const user = await createAccount('deleted@example.com');
+    await db.delete(users).where(eq(users.id, user.id));
+    await expect(checkSession({ id: user.id, sv: 0 })).rejects.toThrow('Session revoked');
   });
 });

@@ -6,6 +6,10 @@ export type Request =
       type: 'estimate';
       payload: { asin?: string; bsr: number; category: string; marketplace: Marketplace; price?: number; reviews?: number };
     }
+  | {
+      type: 'saveBook';
+      payload: { asin: string; marketplace: Marketplace; title: string; category?: string; bsr?: number; price?: number; reviews?: number };
+    }
   | { type: 'whoami' };
 
 export type Response<T = unknown> = { ok: true; data: T } | { ok: false; error: string };

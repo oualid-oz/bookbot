@@ -2,7 +2,7 @@ import type { NextAuthOptions } from 'next-auth';
 import type { Provider } from 'next-auth/providers/index';
 import GoogleProvider, { type GoogleProfile } from 'next-auth/providers/google';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { getPasswordUser, provisionUser } from './users';
+import { getPasswordUser, getSessionVersion, provisionUser } from './users';
 import { verifyAgainstDummy, verifyPassword } from '@/lib/password';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
@@ -91,6 +91,7 @@ export const authOptions: NextAuthOptions = {
       if (account?.provider === 'password') {
         // authorize() already returned the DB user
         token.id = user.id;
+        token.sv = (await getSessionVersion(user.id)) ?? 0;
       } else if (account && user?.email) {
         token.id = await provisionUser({
           email: user.email,
@@ -110,6 +111,14 @@ export const authOptions: NextAuthOptions = {
             session_state: account.session_state,
           },
         });
+        token.sv = (await getSessionVersion(token.id)) ?? 0;
+      } else if (token.id) {
+        // Every later check: sessions from before a password reset stop working.
+        // Throwing makes NextAuth reject the session and clear its cookie.
+        const current = await getSessionVersion(token.id);
+        if (current === null || current !== (token.sv ?? 0)) {
+          throw new Error('Session revoked');
+        }
       }
       return token;
     },

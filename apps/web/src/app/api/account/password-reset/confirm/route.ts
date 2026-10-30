@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db, users } from '@bookbot/db';
 import { signupSchema } from '@bookbot/shared';
 import { hashPassword } from '@/lib/password';
@@ -24,10 +24,16 @@ export async function POST(req: NextRequest) {
     return errorResponse(400, 'This link is invalid or has expired', { fields: { token: ['This link is invalid or has expired'] } });
   }
 
-  // Opening the link proves the user owns the email
+  // Opening the link proves the user owns the email. Bumping the session
+  // version signs out every device that was signed in with the old password.
   await db
     .update(users)
-    .set({ passwordHash: await hashPassword(parsed.data.password), emailVerified: new Date(), updatedAt: new Date() })
+    .set({
+      passwordHash: await hashPassword(parsed.data.password),
+      emailVerified: new Date(),
+      sessionVersion: sql`${users.sessionVersion} + 1`,
+      updatedAt: new Date(),
+    })
     .where(eq(users.email, email));
   return NextResponse.json({ reset: true });
 }

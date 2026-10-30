@@ -8,7 +8,7 @@ import { renderCover, type CoverImageFile } from '../render/cover';
 import { renderInterior, type WordSearchContent } from '../render/interior';
 
 // BullMQ workers use blocking commands, which require maxRetriesPerRequest: null
-const connection = new Redis(process.env.REDIS_URL!, { maxRetriesPerRequest: null });
+export const connection = new Redis(process.env.REDIS_URL!, { maxRetriesPerRequest: null });
 
 export async function processExport(job: Job<ExportJobData>) {
   const { exportId } = job.data;
