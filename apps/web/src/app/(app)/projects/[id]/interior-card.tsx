@@ -6,12 +6,14 @@ import { toast } from 'sonner';
 import { PAGE_TEMPLATES, type InteriorSettings, type PageTemplate } from '@bookbot/shared';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldSeparator } from '@/components/ui/field';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { apiFetch } from '@/lib/api-client';
 import type { ProjectSummary } from '@/components/project-options';
+import type { UploadedImage } from './cover/image-field';
+import { PageDesignFields } from './page-design';
 
 const TEMPLATE_NAMES: Record<PageTemplate, string> = {
   blank: 'Blank',
@@ -26,12 +28,14 @@ export function InteriorCard({ project }: { project: ProjectSummary }) {
   const [settings, setSettings] = useState<InteriorSettings | null>(null);
   const [saved, setSaved] = useState('');
   const [saving, setSaving] = useState(false);
+  const [image, setImage] = useState<UploadedImage | null>(null);
 
   useEffect(() => {
-    apiFetch<{ settings: InteriorSettings }>(`/api/projects/${project.id}/interior`)
-      .then(({ settings }) => {
+    apiFetch<{ settings: InteriorSettings; image: UploadedImage | null }>(`/api/projects/${project.id}/interior`)
+      .then(({ settings, image }) => {
         setSettings(settings);
         setSaved(JSON.stringify(settings));
+        setImage(image);
       })
       .catch((err) => toast.error(err.message));
   }, [project.id]);
@@ -39,6 +43,7 @@ export function InteriorCard({ project }: { project: ProjectSummary }) {
   if (!settings) return <Skeleton className="h-64 rounded-xl" />;
 
   const update = (changes: Partial<InteriorSettings>) => setSettings({ ...settings, ...changes });
+  const updateDecor = (changes: Partial<InteriorSettings['decor']>) => update({ decor: { ...settings.decor, ...changes } });
   const isJournal = project.type === 'journal';
   const template = settings.pageTemplate ?? (isJournal ? 'lined' : 'blank');
   const ruled = ['lined', 'gratitude', 'daily_planner'].includes(template);
@@ -110,6 +115,13 @@ export function InteriorCard({ project }: { project: ProjectSummary }) {
               {toggle('solutions', 'Solutions', 'Answers to every puzzle at the back of the book.', settings.solutions === 'back', (v) => update({ solutions: v ? 'back' : 'none' }))}
             </>
           )}
+
+          <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">Page design</FieldSeparator>
+          <PageDesignFields project={project} decor={settings.decor} image={image} onChange={updateDecor}
+            onImage={(next) => {
+              setImage(next);
+              updateDecor({ imageId: next?.id ?? null });
+            }} />
 
           <Field orientation="horizontal">
             <Button onClick={save} disabled={saving || JSON.stringify(settings) === saved}>

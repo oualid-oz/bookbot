@@ -1,5 +1,5 @@
-import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from 'pdf-lib';
-import { TRIM_SIZES, getMinimumInsideMargin } from '@bookbot/core';
+import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from 'pdf-lib';
+import { FRAME_PADDING, TRIM_SIZES, decorationFrame, getMinimumInsideMargin, pageDecorations, printColor, type DecorShape } from '@bookbot/core';
 import { interiorSettingsSchema, resolvePageTemplate, type InteriorSettings, type PageTemplate } from '@bookbot/shared';
 import { wrapText } from './cover';
 import { fitFontSize, inches, safeText } from './text';
@@ -48,6 +48,10 @@ export interface InteriorInput {
   pageCount: number;
   puzzles: PuzzleContent[];
   settings?: Partial<InteriorSettings>;
+  /** Paper type: decorations print in grey unless it's color */
+  paper?: 'white' | 'cream' | 'color';
+  /** The uploaded image for settings.decor.imageId */
+  decorImage?: { bytes: Uint8Array; mimeType: string };
 }
 
 const HOW_TO_PLAY: Record<PuzzleContent['type'], string[]> = {
@@ -88,6 +92,13 @@ interface Layout {
   mono: PDFFont;
   /** Text and line size multiplier (large print) */
   scale: number;
+  decor: InteriorSettings['decor'];
+  colorPaper: boolean;
+  decorImage: PDFImage | null;
+  /** A border or frame image: content keeps clear of it */
+  framed: boolean;
+  /** A background behind content: puzzle grids get a white area */
+  busyBackground: boolean;
 }
 
 /**
@@ -109,12 +120,13 @@ export async function renderInterior(input: InteriorInput): Promise<Uint8Array> 
     bold: await doc.embedFont(StandardFonts.HelveticaBold),
     mono: await doc.embedFont(StandardFonts.CourierBold),
     scale: 1,
+    ...(await decorLayout(doc, input)),
   };
   const settings = interiorSettingsSchema.parse(input.settings ?? {});
   if (settings.largePrint) layout.scale = 1.4;
 
   drawTitlePage(layout, input);
-  addPage(layout); // blank verso so content starts on a right-hand page
+  addPage(layout, false); // blank verso so content starts on a right-hand page
 
   // Headings name the type only when the book mixes puzzle types
   const mixed = new Set(input.puzzles.map((p) => p.type)).size > 1;
@@ -133,10 +145,12 @@ export async function renderInterior(input: InteriorInput): Promise<Uint8Array> 
 
   // Fill to the project's page count, and always to an even number of pages
   const template = resolvePageTemplate(settings, input.projectType);
+  // Blank filler pages in a puzzle book stay plain; a journal's blank pages are its content
+  const decorateFiller = template !== 'blank' || input.projectType === 'journal';
   const target = Math.max(input.pageCount, doc.getPageCount());
   while (doc.getPageCount() < target || doc.getPageCount() % 2 !== 0) {
     const pageIndex = doc.getPageCount();
-    drawTemplatePage(layout, addPage(layout), contentBox(layout, pageIndex), template, settings.lineSpacing);
+    drawTemplatePage(layout, addPage(layout, decorateFiller), contentBox(layout, pageIndex), template, settings.lineSpacing);
   }
 
   // Page numbers on everything after the title spread
@@ -156,15 +170,113 @@ export async function renderInterior(input: InteriorInput): Promise<Uint8Array> 
   return doc.save();
 }
 
-function addPage(layout: Layout): PDFPage {
-  return layout.doc.addPage([layout.width, layout.height]);
+/** Decoration settings, with the image embedded once for every page */
+async function decorLayout(doc: PDFDocument, input: InteriorInput) {
+  const { decor } = interiorSettingsSchema.parse(input.settings ?? {});
+  const file = decor.imageId ? input.decorImage : undefined;
+  const decorImage = file ? (file.mimeType === 'image/png' ? await doc.embedPng(file.bytes) : await doc.embedJpg(file.bytes)) : null;
+  return {
+    decor,
+    colorPaper: input.paper === 'color',
+    decorImage,
+    framed: decor.border !== 'none' || (!!decorImage && decor.imageMode === 'frame'),
+    busyBackground: decor.background !== 'none' || !!decorImage,
+  };
+}
+
+/** A new page, with its border, background and image drawn first so content sits on top */
+function addPage(layout: Layout, decorate = true): PDFPage {
+  const pageIndex = layout.doc.getPageCount();
+  const page = layout.doc.addPage([layout.width, layout.height]);
+  if (decorate) drawDecorations(layout, page, pageIndex);
+  return page;
+}
+
+/** The decoration frame in PDF coordinates (origin bottom-left) */
+function frameRect(layout: Layout, pageIndex: number) {
+  const frame = decorationFrame(layout.width, layout.height, layout.inside / 72, pageIndex % 2 === 0);
+  return { ...frame, y: layout.height - frame.y - frame.height };
+}
+
+function drawShapes(layout: Layout, page: PDFPage, shapes: DecorShape[]) {
+  const color = (hex: string) => {
+    const n = parseInt(printColor(hex, layout.colorPaper).slice(1), 16);
+    return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+  };
+  for (const shape of shapes) {
+    // pdf-lib fills unless only a border color is given, so set just the keys in use
+    page.drawSvgPath(shape.d, {
+      x: 0,
+      y: layout.height,
+      ...(shape.fill ? { color: color(shape.fill), opacity: shape.opacity ?? 1 } : {}),
+      ...(shape.stroke
+        ? { borderColor: color(shape.stroke), borderWidth: (shape.strokeWidth ?? 1) * Math.min(layout.scale, 1.2), borderOpacity: shape.opacity ?? 1, borderDashArray: shape.dash }
+        : {}),
+    });
+  }
+}
+
+function drawDecorations(layout: Layout, page: PDFPage, pageIndex: number) {
+  const { decor } = layout;
+  const frame = decorationFrame(layout.width, layout.height, layout.inside / 72, pageIndex % 2 === 0);
+  const shapes = (border: typeof decor.border, background: typeof decor.background) =>
+    pageDecorations({
+      width: layout.width,
+      height: layout.height,
+      frame,
+      border,
+      borderColor: decor.borderColor,
+      background,
+      backgroundColor: decor.backgroundColor,
+      intensity: decor.intensity,
+      seed: pageIndex + 1,
+    });
+
+  drawShapes(layout, page, shapes('none', decor.background));
+
+  const image = layout.decorImage;
+  if (image) {
+    if (decor.imageMode === 'frame') {
+      // Stretched to the safe area: frame artwork is drawn for the page's shape
+      const rect = frameRect(layout, pageIndex);
+      page.drawImage(image, rect);
+    } else {
+      // Centered behind the content, faded so text stays readable
+      const box = contentBox(layout, pageIndex);
+      const scale = Math.min((box.width * 0.8) / image.width, ((box.top - box.bottom) * 0.8) / image.height);
+      const width = image.width * scale;
+      const height = image.height * scale;
+      page.drawImage(image, {
+        x: box.x + (box.width - width) / 2,
+        y: box.bottom + (box.top - box.bottom - height) / 2,
+        width,
+        height,
+        opacity: decor.imageOpacity,
+      });
+    }
+  }
+
+  drawShapes(layout, page, shapes(decor.border, 'none'));
+}
+
+/** A white area behind a puzzle grid, when the page has a background */
+function clearBehind(page: PDFPage, layout: Layout, x: number, y: number, width: number, height: number) {
+  if (!layout.busyBackground) return;
+  const pad = 4;
+  page.drawRectangle({ x: x - pad, y: y - pad, width: width + 2 * pad, height: height + 2 * pad, color: rgb(1, 1, 1) });
 }
 
 /** Content box for a page; the gutter is on the left of odd (right-hand) pages */
 function contentBox(layout: Layout, pageIndex: number) {
   const isRightHand = pageIndex % 2 === 0;
-  const left = isRightHand ? layout.inside : inches(OUTSIDE_MARGIN);
-  const right = isRightHand ? inches(OUTSIDE_MARGIN) : layout.inside;
+  let left = isRightHand ? layout.inside : inches(OUTSIDE_MARGIN);
+  let right = isRightHand ? inches(OUTSIDE_MARGIN) : layout.inside;
+  if (layout.framed) {
+    // Keep content inside the border, with some room to breathe
+    const frame = frameRect(layout, pageIndex);
+    left = Math.max(left, frame.x + FRAME_PADDING);
+    right = Math.max(right, layout.width - frame.x - frame.width + FRAME_PADDING);
+  }
   return {
     x: left,
     width: layout.width - left - right,
@@ -217,6 +329,7 @@ function drawSudoku(layout: Layout, puzzle: SudokuContent, heading: string, show
   const cell = size / 9;
   const left = box.x + (box.width - size) / 2;
   const top = box.top;
+  clearBehind(page, layout, left, top - size, size, size);
 
   for (let i = 0; i <= 9; i++) {
     const thickness = i % 3 === 0 ? 2 : 0.5;
@@ -257,6 +370,7 @@ function drawMaze(layout: Layout, maze: MazeContent, heading: string, showSoluti
   const cell = Math.min(box.width / maze.width, (box.top - box.bottom - 30) / maze.height);
   const left = box.x + (box.width - cell * maze.width) / 2;
   const top = box.top - 12; // room for the "Start" label
+  clearBehind(page, layout, left, top - maze.height * cell, maze.width * cell, maze.height * cell);
   const corner = (r: number, c: number) => ({ x: left + c * cell, y: top - r * cell });
   const thickness = Math.max(0.75, Math.min(2, cell * 0.12)) * layout.scale;
 
@@ -314,6 +428,7 @@ function drawWordSearch(layout: Layout, puzzle: WordSearchContent, heading: stri
   const cell = Math.min(box.width / cols, (box.top - box.bottom - listHeight) / rows);
   const gridLeft = box.x + (box.width - cell * cols) / 2;
   const gridTop = box.top;
+  clearBehind(page, layout, gridLeft, gridTop - rows * cell, cell * cols, cell * rows);
   const letterSize = cell * (layout.scale > 1 ? 0.62 : 0.55);
   const cellCenter = (r: number, c: number) => ({
     x: gridLeft + c * cell + cell / 2,
@@ -556,7 +671,8 @@ function drawCrossword(layout: Layout, puzzle: CrosswordContent, heading: string
       if (!letter) return;
       const x = left + c * cell;
       const y = top - (r + 1) * cell;
-      page.drawRectangle({ x, y, width: cell, height: cell, borderColor: BLACK, borderWidth: 0.75 * layout.scale });
+      // White squares, so a background pattern doesn't show through
+      page.drawRectangle({ x, y, width: cell, height: cell, color: rgb(1, 1, 1), borderColor: BLACK, borderWidth: 0.75 * layout.scale });
       const number = numberAt.get(`${r},${c}`);
       if (number) page.drawText(String(number), { x: x + 1.5, y: y + cell - numberSize - 1, size: numberSize, font: layout.regular, color: BLACK });
       if (showSolution) {

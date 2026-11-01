@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       return errorResponse(400, 'Incorrect password', { fields: { currentPassword: ['Incorrect password'] } });
     }
   } else if (!user.emailVerified) {
-    // Only reachable without a verified email through dev login
+    // Accounts without a password sign in with Google, which verifies the email; this guards anything else
     return errorResponse(403, 'Verify your email before setting a password');
   }
 

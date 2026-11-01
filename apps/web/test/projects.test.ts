@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { db, projects, puzzleSets, savedNiches } from '@bookbot/db';
+import { assets, db, projects, puzzleSets, savedNiches } from '@bookbot/db';
 import { GET as listProjects, POST as createProject } from '@/app/api/projects/route';
 import { DELETE as deleteProject, GET as getProject, PATCH as updateProject } from '@/app/api/projects/[id]/route';
 import { GET as getCover, PUT as saveCover } from '@/app/api/projects/[id]/cover/route';
@@ -229,7 +229,23 @@ describe('interior settings', () => {
     signInAs(alice);
     const ctx = params({ id: projectId });
     const initial = await json<{ settings: Record<string, unknown> }>(await getInterior(request('/x'), ctx));
-    expect(initial.settings).toEqual({ version: 1, solutions: 'back', howToPlay: true, largePrint: false, lineSpacing: 'wide' });
+    expect(initial.settings).toEqual({
+      version: 1,
+      solutions: 'back',
+      howToPlay: true,
+      largePrint: false,
+      lineSpacing: 'wide',
+      decor: {
+        border: 'none',
+        borderColor: '#333333',
+        background: 'none',
+        backgroundColor: '#888888',
+        intensity: 'light',
+        imageId: null,
+        imageMode: 'frame',
+        imageOpacity: 0.2,
+      },
+    });
 
     const body = { solutions: 'none', largePrint: true, pageTemplate: 'daily_planner', lineSpacing: 'college' };
     expect((await saveInterior(request('/x', { method: 'PUT', body }), ctx)).status).toBe(200);
@@ -238,6 +254,30 @@ describe('interior settings', () => {
 
     const bad = await saveInterior(request('/x', { method: 'PUT', body: { pageTemplate: 'wallpaper' } }), ctx);
     expect(bad.status).toBe(400);
+  });
+
+  it('saves page decorations and only accepts your own finished images', async () => {
+    signInAs(alice);
+    const ctx = params({ id: projectId });
+    const image = (orgId: string, status: 'pending' | 'ready') =>
+      db.insert(assets).values({ orgId, r2Key: `assets/${orgId}/${status}-${Math.random()}.png`, kind: 'image', status, mimeType: 'image/png', width: 1800, height: 2700 }).returning();
+    const [mine] = await image(alice.orgId, 'ready');
+    const [pending] = await image(alice.orgId, 'pending');
+    const [theirs] = await image(bob.orgId, 'ready');
+    const save = (decor: Record<string, unknown>) => saveInterior(request('/x', { method: 'PUT', body: { decor } }), ctx);
+
+    const res = await save({ border: 'wavy', borderColor: '#7c3aed', background: 'confetti', intensity: 'medium', imageId: mine.id, imageMode: 'watermark' });
+    expect(res.status).toBe(200);
+    const { settings, image: info } = await json<{ settings: { decor: Record<string, unknown> }; image: { id: string; width: number } }>(
+      await getInterior(request('/x'), ctx)
+    );
+    expect(settings.decor).toMatchObject({ border: 'wavy', background: 'confetti', imageId: mine.id, imageMode: 'watermark' });
+    expect(info).toMatchObject({ id: mine.id, width: 1800 });
+
+    expect((await save({ imageId: theirs.id })).status).toBe(400);
+    expect((await save({ imageId: pending.id })).status).toBe(400);
+    expect((await save({ border: 'sparkles' })).status).toBe(400);
+    expect((await save({ borderColor: 'purple' })).status).toBe(400);
   });
 
   it("hides other organizations' projects", async () => {

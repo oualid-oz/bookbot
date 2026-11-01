@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TRIM_SIZES } from '@bookbot/core';
+import { BACKGROUND_INTENSITIES, BACKGROUND_PATTERNS, BORDER_STYLES, TRIM_SIZES } from '@bookbot/core';
 
 export const PROJECT_TYPES = ['book', 'puzzle_book', 'journal'] as const;
 export const PAPER_TYPES = ['white', 'cream', 'color'] as const;
@@ -110,6 +110,20 @@ export const interiorSettingsSchema = z.object({
   /** Unset: lined for journals, blank otherwise */
   pageTemplate: z.enum(PAGE_TEMPLATES).optional(),
   lineSpacing: z.enum(['college', 'wide']).default('wide'),
+  /** Border, background pattern and image on every page with content */
+  decor: z
+    .object({
+      border: z.enum(BORDER_STYLES).default('none'),
+      borderColor: hexColor.default('#333333'),
+      background: z.enum(BACKGROUND_PATTERNS).default('none'),
+      backgroundColor: hexColor.default('#888888'),
+      intensity: z.enum(BACKGROUND_INTENSITIES).default('light'),
+      /** An uploaded PNG/JPEG: a full-page frame, or a faded picture behind the content */
+      imageId: z.string().uuid().nullable().default(null),
+      imageMode: z.enum(['frame', 'watermark']).default('frame'),
+      imageOpacity: z.number().min(0.05).max(1).default(0.2),
+    })
+    .default({}),
 });
 
 export type InteriorSettings = z.infer<typeof interiorSettingsSchema>;

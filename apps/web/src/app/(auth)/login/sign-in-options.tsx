@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { AlertCircleIcon, Loader2Icon } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel, FieldSeparator } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -22,7 +21,6 @@ interface ProviderInfo {
 
 export function SignInOptions({ providers }: { providers: ProviderInfo[] }) {
   const passwordProvider = providers.find((p) => p.id === 'password');
-  const devProvider = providers.find((p) => p.id === 'dev-login');
   const oauthProviders = providers.filter((p) => p.type === 'oauth');
 
   return (
@@ -48,8 +46,6 @@ export function SignInOptions({ providers }: { providers: ProviderInfo[] }) {
           </Field>
         </>
       )}
-
-      {devProvider && <DevLoginForm providerId={devProvider.id} name={devProvider.name} />}
 
       <FieldDescription className="text-center">
         Don&apos;t have an account? <AuthLink href="/signup">Sign up</AuthLink>
@@ -115,35 +111,5 @@ function PasswordForm({ providerId }: { providerId: string }) {
         </Field>
       </FieldGroup>
     </form>
-  );
-}
-
-function DevLoginForm({ providerId, name }: { providerId: string; name: string }) {
-  const [email, setEmail] = useState('');
-
-  return (
-    <>
-      <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
-        Development
-      </FieldSeparator>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          signIn(providerId, { email, callbackUrl: getCallbackUrl() });
-        }}
-      >
-        <Field>
-          <FieldLabel htmlFor="dev-email">
-            {name} <Badge variant="outline">dev only</Badge>
-          </FieldLabel>
-          <div className="flex gap-2">
-            <Input id="dev-email" type="email" required placeholder="you@example.com"
-              value={email} onChange={(e) => setEmail(e.target.value)} />
-            <Button type="submit" variant="secondary">Sign in</Button>
-          </div>
-          <FieldDescription>Passwordless login, only available under next dev.</FieldDescription>
-        </Field>
-      </form>
-    </>
   );
 }

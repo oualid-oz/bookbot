@@ -97,8 +97,20 @@ export async function processExport(job: Job<ExportJobData>) {
       .limit(1);
     const settings = interiorSettingsSchema.safeParse(doc?.jsonState ?? {});
 
+    // The page decoration image, if it's a finished upload from the project's organization
+    const imageId = settings.success ? settings.data.decor.imageId : null;
+    const [imageRow] = imageId
+      ? await db
+          .select()
+          .from(assets)
+          .where(and(eq(assets.id, imageId), eq(assets.orgId, project.orgId), eq(assets.status, 'ready')))
+      : [];
+    const imageBytes = imageRow?.mimeType ? await getStorage().get(imageRow.r2Key) : null;
+
     pdf = await renderInterior({
       settings: settings.success ? settings.data : undefined,
+      paper: project.paper,
+      decorImage: imageBytes && imageRow?.mimeType ? { bytes: imageBytes, mimeType: imageRow.mimeType } : undefined,
       title,
       subtitle: listing?.subtitle,
       projectType: project.type,

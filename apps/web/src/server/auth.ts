@@ -49,25 +49,6 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   );
 }
 
-// Passwordless email login for local development only. `next build` and
-// `next start` run with NODE_ENV=production, so this never ships.
-if (process.env.NODE_ENV === 'development') {
-  providers.push(
-    CredentialsProvider({
-      id: 'dev-login',
-      name: 'Dev login',
-      credentials: {
-        email: { label: 'Email', type: 'email' },
-      },
-      async authorize(credentials) {
-        const email = credentials?.email?.trim().toLowerCase();
-        if (!email || !/^[^\s@]+@[^\s@]+$/.test(email)) return null;
-        return { id: email, email, name: email.split('@')[0] };
-      },
-    })
-  );
-}
-
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   session: {

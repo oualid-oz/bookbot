@@ -76,15 +76,15 @@ describe('account linking', () => {
   });
 
   it("doesn't drop the password for providers that don't verify email", async () => {
-    await signupRequest({ name: 'Dev', email: 'dev@example.com', password: 'dev password 123' });
+    await signupRequest({ name: 'Reader', email: 'unverified@example.com', password: 'my password 123' });
     await provisionUser({
-      email: 'dev@example.com',
-      provider: 'dev-login',
-      providerAccountId: 'dev@example.com',
-      type: 'credentials',
+      email: 'unverified@example.com',
+      provider: 'some-provider',
+      providerAccountId: 'unverified@example.com',
+      type: 'oauth',
       emailVerified: false,
     });
-    const [user] = await db.select().from(users).where(eq(users.email, 'dev@example.com'));
+    const [user] = await db.select().from(users).where(eq(users.email, 'unverified@example.com'));
     expect(user.passwordHash).not.toBeNull();
   });
 });
