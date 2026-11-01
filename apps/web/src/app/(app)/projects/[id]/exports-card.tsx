@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { DownloadIcon, FileTextIcon, ImageIcon, Loader2Icon } from 'lucide-react';
+import { DownloadIcon, EyeIcon, FileTextIcon, ImageIcon, Loader2Icon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { apiFetch } from '@/lib/api-client';
 
@@ -28,6 +29,7 @@ const STATUS_VARIANT = {
 export function ExportsCard({ projectId }: { projectId: string }) {
   const [rows, setRows] = useState<ExportRow[]>([]);
   const [starting, setStarting] = useState<string | null>(null);
+  const [preview, setPreview] = useState<ExportRow | null>(null);
 
   const load = useCallback(
     () =>
@@ -86,7 +88,7 @@ export function ExportsCard({ projectId }: { projectId: string }) {
                 <TableHead>File</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Created</TableHead>
-                <TableHead className="text-right">Download</TableHead>
+                <TableHead className="text-right">File</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -102,11 +104,16 @@ export function ExportsCard({ projectId }: { projectId: string }) {
                   <TableCell className="text-muted-foreground">{new Date(row.createdAt).toLocaleString()}</TableCell>
                   <TableCell className="text-right">
                     {row.downloadUrl && (
-                      <Button variant="ghost" size="icon-sm" asChild>
-                        <a href={row.downloadUrl} aria-label="Download PDF">
-                          <DownloadIcon />
-                        </a>
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon-sm" aria-label="Preview PDF" onClick={() => setPreview(row)}>
+                          <EyeIcon />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" asChild>
+                          <a href={row.downloadUrl} aria-label="Download PDF">
+                            <DownloadIcon />
+                          </a>
+                        </Button>
+                      </div>
                     )}
                   </TableCell>
                 </TableRow>
@@ -115,6 +122,20 @@ export function ExportsCard({ projectId }: { projectId: string }) {
           </Table>
         )}
       </CardContent>
+
+      <Dialog open={!!preview} onOpenChange={(open) => !open && setPreview(null)}>
+        <DialogContent className="flex h-[90vh] flex-col sm:max-w-5xl">
+          <DialogHeader>
+            <DialogTitle className="capitalize">{preview?.spec?.kind ?? 'interior'} preview</DialogTitle>
+            <DialogDescription>
+              Check every page before uploading to KDP: margins, page numbers and puzzle solutions.
+            </DialogDescription>
+          </DialogHeader>
+          {preview?.downloadUrl && (
+            <iframe src={`${preview.downloadUrl}?inline=1`} title="PDF preview" className="w-full flex-1 rounded-md border" />
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

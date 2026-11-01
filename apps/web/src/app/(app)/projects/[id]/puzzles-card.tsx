@@ -16,6 +16,7 @@ import { ApiError, apiFetch } from '@/lib/api-client';
 interface Puzzle {
   id: string;
   type: PuzzleType;
+  title?: string | null;
   width?: number;
   height?: number;
   words?: string[];
@@ -24,7 +25,23 @@ interface Puzzle {
   clues?: number;
 }
 
-const TYPE_NAMES: Record<PuzzleType, string> = { word_search: 'Word search', sudoku: 'Sudoku', maze: 'Maze' };
+const TYPE_NAMES: Record<PuzzleType, string> = { word_search: 'Word search', sudoku: 'Sudoku', maze: 'Maze', crossword: 'Crossword' };
+
+/** Options in the type picker; a themed word search is stored as a word search */
+type FormType = PuzzleType | 'word_search_theme';
+const FORM_TYPES: { value: FormType; label: string }[] = [
+  { value: 'word_search_theme', label: 'Word search: theme' },
+  { value: 'word_search', label: 'Word search: my words' },
+  { value: 'crossword', label: 'Crossword' },
+  { value: 'sudoku', label: 'Sudoku' },
+  { value: 'maze', label: 'Maze' },
+];
+
+interface Theme {
+  id: string;
+  name: string;
+  topics: string[];
+}
 
 const GRID_SIZES = [10, 12, 15, 18, 20];
 
@@ -40,10 +57,22 @@ const COUNTS = [1, 5, 10, 25, 50];
 
 const capitalize = (s: string) => s[0].toUpperCase() + s.slice(1);
 
+/** "word: clue" lines (also "word - clue" or tab-separated) */
+function parseClues(text: string) {
+  return text
+    .split('\n')
+    .map((line) => line.match(/^\s*([^:\t]+?)\s*(?::|\t| - )\s*(.+?)\s*$/))
+    .filter((m): m is RegExpMatchArray => !!m)
+    .map((m) => ({ answer: m[1], clue: m[2] }));
+}
+
 export function PuzzlesCard({ projectId, highlighted }: { projectId: string; highlighted: boolean }) {
   const [puzzles, setPuzzles] = useState<Puzzle[]>([]);
-  const [type, setType] = useState<PuzzleType>('word_search');
+  const [type, setType] = useState<FormType>('word_search_theme');
+  const [themes, setThemes] = useState<Theme[]>([]);
+  const [theme, setTheme] = useState('animals');
   const [words, setWords] = useState('');
+  const [clues, setClues] = useState('');
   const [size, setSize] = useState('12');
   const [difficulty, setDifficulty] = useState<string>('medium');
   const [mazeSize, setMazeSize] = useState('1');
@@ -61,9 +90,16 @@ export function PuzzlesCard({ projectId, highlighted }: { projectId: string; hig
 
   useEffect(() => {
     load();
+    apiFetch<{ themes: Theme[] }>('/api/puzzles/themes')
+      .then((data) => setThemes(data.themes))
+      .catch(() => {});
   }, [load]);
 
+  const selectedTheme = themes.find((t) => t.id === theme);
+
   const requestBody = () => {
+    if (type === 'crossword') return { type, entries: parseClues(clues) };
+    if (type === 'word_search_theme') return { type, theme, size: Number(size), count: Number(count) };
     if (type === 'sudoku') return { type, difficulty, count: Number(count) };
     if (type === 'maze') {
       const { width, height } = MAZE_SIZES[Number(mazeSize)];
@@ -84,14 +120,15 @@ export function PuzzlesCard({ projectId, highlighted }: { projectId: string; hig
       });
       await load();
       if (type === 'word_search') setWords('');
-      const unplaced = added[0]?.unplaced ?? [];
+      if (type === 'crossword') setClues('');
+      const unplaced = added.flatMap((p) => p.unplaced ?? []);
       if (unplaced.length) {
         toast.warning(`${unplaced.length} word(s) didn't fit: ${unplaced.join(', ')}`);
       } else {
         toast.success(added.length === 1 ? 'Puzzle added' : `${added.length} puzzles added`);
       }
     } catch (err) {
-      setError(err instanceof ApiError ? (err.fields.words?.[0] ?? err.message) : 'Could not add puzzle');
+      setError(err instanceof ApiError ? (err.fields.words?.[0] ?? err.fields.entries?.[0] ?? err.message) : 'Could not add puzzle');
     } finally {
       setAdding(false);
     }
@@ -129,15 +166,32 @@ export function PuzzlesCard({ projectId, highlighted }: { projectId: string; hig
       <CardContent className="flex flex-col gap-4">
         <form onSubmit={handleAdd}>
           <FieldGroup>
-            <Field className="w-44">
+            <Field className="w-56">
               <FieldLabel htmlFor="puzzle-type">Type</FieldLabel>
-              <Select value={type} onValueChange={(value) => { setType(value as PuzzleType); setError(''); }}>
+              <Select value={type} onValueChange={(value) => { setType(value as FormType); setError(''); }}>
                 <SelectTrigger id="puzzle-type" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Object.entries(TYPE_NAMES).map(([value, name]) => <SelectItem key={value} value={value}>{name}</SelectItem>)}
+                  {FORM_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </Field>
+
+            {type === 'word_search_theme' && (
+              <Field>
+                <FieldLabel htmlFor="theme">Theme</FieldLabel>
+                <Select value={theme} onValueChange={setTheme}>
+                  <SelectTrigger id="theme" className="w-full sm:w-64"><SelectValue placeholder="Loading..." /></SelectTrigger>
+                  <SelectContent>
+                    {themes.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {selectedTheme && (
+                  <FieldDescription>
+                    One topic per puzzle: {selectedTheme.topics.join(', ')}.
+                  </FieldDescription>
+                )}
+              </Field>
+            )}
 
             {type === 'word_search' && (
               <Field data-invalid={!!error}>
@@ -148,8 +202,24 @@ export function PuzzlesCard({ projectId, highlighted }: { projectId: string; hig
               </Field>
             )}
 
+            {type === 'crossword' && (
+              <Field data-invalid={!!error}>
+                <FieldLabel htmlFor="clues">Words and clues</FieldLabel>
+                <Textarea id="clues" rows={6} value={clues} aria-invalid={!!error}
+                  onChange={(e) => setClues(e.target.value)}
+                  placeholder={'elephant: Largest land animal\ngiraffe: Tallest animal\nowl: Bird awake at night\nzebra: Striped horse'} />
+                {error ? (
+                  <FieldError>{error}</FieldError>
+                ) : (
+                  <FieldDescription>
+                    One per line, as <code>word: clue</code>. 4 to 40 words; {parseClues(clues).length} entered.
+                  </FieldDescription>
+                )}
+              </Field>
+            )}
+
             <div className="flex flex-wrap items-end gap-2">
-              {type === 'word_search' && (
+              {(type === 'word_search' || type === 'word_search_theme') && (
                 <Field className="w-32">
                   <FieldLabel htmlFor="grid">Grid</FieldLabel>
                   <Select value={size} onValueChange={setSize}>
@@ -160,6 +230,7 @@ export function PuzzlesCard({ projectId, highlighted }: { projectId: string; hig
                   </Select>
                 </Field>
               )}
+              {type === 'word_search_theme' && countField}
               {type === 'sudoku' && (
                 <>
                   <Field className="w-36">
@@ -188,12 +259,12 @@ export function PuzzlesCard({ projectId, highlighted }: { projectId: string; hig
                   {countField}
                 </>
               )}
-              <Button type="submit" disabled={adding || (type === 'word_search' && !words.trim())}>
+              <Button type="submit" disabled={adding || (type === 'word_search' && !words.trim()) || (type === 'crossword' && parseClues(clues).length < 4)}>
                 {adding ? <Loader2Icon className="animate-spin" /> : <PlusIcon />}
-                {type === 'word_search' || count === '1' ? 'Add puzzle' : `Add ${count} puzzles`}
+                {type === 'word_search' || type === 'crossword' || count === '1' ? 'Add puzzle' : `Add ${count} puzzles`}
               </Button>
             </div>
-            {type !== 'word_search' && error && <FieldError>{error}</FieldError>}
+            {type !== 'word_search' && type !== 'crossword' && error && <FieldError>{error}</FieldError>}
           </FieldGroup>
         </form>
 
@@ -203,6 +274,7 @@ export function PuzzlesCard({ projectId, highlighted }: { projectId: string; hig
               <div className="flex flex-wrap items-center gap-2 font-medium">
                 Puzzle {i + 1}
                 <Badge>{TYPE_NAMES[puzzle.type] ?? puzzle.type}</Badge>
+                {puzzle.title && <Badge variant="outline">{puzzle.title}</Badge>}
                 {puzzle.width && <Badge variant="outline">{puzzle.width} × {puzzle.height}</Badge>}
                 {puzzle.words && <Badge variant="secondary">{puzzle.words.length} words</Badge>}
                 {puzzle.difficulty && <Badge variant="outline">{capitalize(puzzle.difficulty)}</Badge>}
@@ -218,7 +290,10 @@ export function PuzzlesCard({ projectId, highlighted }: { projectId: string; hig
                 <AlertTriangleIcon />
                 <AlertTitle>{puzzle.unplaced.length} word(s) didn&apos;t fit</AlertTitle>
                 <AlertDescription>
-                  {puzzle.unplaced.join(', ')} left out. Use a bigger grid or fewer words.
+                  {puzzle.unplaced.join(', ')} left out.{' '}
+                  {puzzle.type === 'crossword'
+                    ? 'They share no letters with the rest, or are longer than 17 letters.'
+                    : 'Use a bigger grid or fewer words.'}
                 </AlertDescription>
               </Alert>
             )}

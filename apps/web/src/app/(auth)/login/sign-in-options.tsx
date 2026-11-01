@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel, FieldSeparator } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { AuthLink } from '@/components/auth-link';
+import { getCallbackUrl } from '@/lib/callback-url';
 
 interface ProviderInfo {
   id: string;
@@ -17,10 +19,6 @@ interface ProviderInfo {
   type: string;
 }
 
-// The auth proxy sends users here with ?callbackUrl=<page they wanted>
-function getCallbackUrl() {
-  return new URLSearchParams(window.location.search).get('callbackUrl') || '/research';
-}
 
 export function SignInOptions({ providers }: { providers: ProviderInfo[] }) {
   const passwordProvider = providers.find((p) => p.id === 'password');
@@ -54,7 +52,7 @@ export function SignInOptions({ providers }: { providers: ProviderInfo[] }) {
       {devProvider && <DevLoginForm providerId={devProvider.id} name={devProvider.name} />}
 
       <FieldDescription className="text-center">
-        Don&apos;t have an account? <Link href="/signup">Sign up</Link>
+        Don&apos;t have an account? <AuthLink href="/signup">Sign up</AuthLink>
       </FieldDescription>
     </FieldGroup>
   );

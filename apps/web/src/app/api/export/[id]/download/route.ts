@@ -4,7 +4,7 @@ import { db, exports, projects } from '@bookbot/db';
 import { getStorage } from '@bookbot/storage';
 import { errorResponse, isUuid, requireOrgAccess, requireUser } from '@/server/org-access';
 
-export async function GET(_req: NextRequest, ctx: RouteContext<'/api/export/[id]/download'>) {
+export async function GET(req: NextRequest, ctx: RouteContext<'/api/export/[id]/download'>) {
   const user = await requireUser();
   if (!user.ok) return user.response;
 
@@ -36,7 +36,9 @@ export async function GET(_req: NextRequest, ctx: RouteContext<'/api/export/[id]
   return new Response(Buffer.from(file), {
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="bookbot-export-${id}.pdf"`,
+      // ?inline=1 shows it in the browser's PDF viewer (the in-app preview)
+      'Content-Disposition': `${req.nextUrl.searchParams.get('inline') === '1' ? 'inline' : 'attachment'}; filename="bookbot-export-${id}.pdf"`,
+      'X-Content-Type-Options': 'nosniff',
       'Content-Length': String(file.length),
       'Cache-Control': 'private, no-store',
     },

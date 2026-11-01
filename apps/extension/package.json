@@ -8,7 +8,9 @@
     "lint": "eslint",
     "clean": "rm -rf .wxt dist",
     "test": "vitest run",
-    "typecheck": "wxt prepare && tsc --noEmit"
+    "typecheck": "wxt prepare && tsc --noEmit",
+    "zip": "node scripts/check-api-url.mjs && wxt prepare && tsc --noEmit && wxt zip",
+    "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {},
   "devDependencies": {

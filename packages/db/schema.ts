@@ -335,8 +335,10 @@ export const listings = pgTable('listings', {
   projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
   title: varchar('title', { length: 255 }).notNull(),
   subtitle: varchar('subtitle', { length: 255 }),
+  author: varchar('author', { length: 255 }),
   description: text('description').notNull(),
   keywords: jsonb('keywords').notNull(), // Array of keywords
+  categories: jsonb('categories').notNull().default([]), // Up to 3 KDP category paths
   createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updatedAt', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({

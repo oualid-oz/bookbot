@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
 import { AlertCircleIcon, Loader2Icon } from 'lucide-react';
@@ -10,6 +9,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { AuthLink } from '@/components/auth-link';
+import { getCallbackUrl, withCallbackUrl } from '@/lib/callback-url';
 
 type FieldErrors = Partial<Record<keyof SignupInput, string[]>>;
 
@@ -56,10 +57,10 @@ export function SignupForm() {
       });
       if (result?.error) {
         // Account exists but automatic sign-in failed; let them sign in manually
-        router.push('/login');
+        router.push(withCallbackUrl('/login'));
         return;
       }
-      router.push('/research');
+      router.push(getCallbackUrl());
       router.refresh();
     } catch {
       setError('Something went wrong. Please try again.');
@@ -111,7 +112,7 @@ export function SignupForm() {
             {loading ? 'Creating account...' : 'Create account'}
           </Button>
           <FieldDescription className="text-center">
-            Already have an account? <Link href="/login">Sign in</Link>
+            Already have an account? <AuthLink href="/login">Sign in</AuthLink>
           </FieldDescription>
         </Field>
       </FieldGroup>

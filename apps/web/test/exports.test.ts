@@ -103,6 +103,10 @@ describe('export status and download', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/pdf');
     expect(await res.text()).toBe('%PDF-test');
+    expect(res.headers.get('content-disposition')).toMatch(/^attachment;/);
+    // The in-app preview asks for it inline
+    const inline = await download(request('/x?inline=1'), ctx);
+    expect(inline.headers.get('content-disposition')).toMatch(/^inline;/);
 
     signInAs(bob);
     expect((await download(request('/x'), ctx)).status).toBe(404);

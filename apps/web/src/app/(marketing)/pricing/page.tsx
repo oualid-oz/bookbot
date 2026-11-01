@@ -8,7 +8,7 @@ import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader,
 const PLAN_DESCRIPTIONS: Record<keyof typeof PLAN_LIMITS, string> = {
   free: 'Try Bookbot on a few books',
   pro: 'For active KDP publishers',
-  enterprise: 'For teams and high volume',
+  enterprise: 'For high-volume publishers',
 };
 
 function formatLimit(value: number) {

@@ -44,6 +44,10 @@ export default function HomePage() {
           </Card>
         ))}
       </div>
+
+      <footer className="text-sm text-muted-foreground">
+        <Link href="/privacy" className="hover:underline">Privacy policy</Link>
+      </footer>
     </main>
   );
 }

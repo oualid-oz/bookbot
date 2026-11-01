@@ -2,7 +2,7 @@ import { Worker, Job } from 'bullmq';
 import Redis from 'ioredis';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { assets, db, exports, listings, projectDocs, projects, puzzleSets } from '@bookbot/db';
-import { EXPORT_QUEUE, coverDesignSchema, exportSpecSchema, type ExportJobData } from '@bookbot/shared';
+import { EXPORT_QUEUE, coverDesignSchema, exportSpecSchema, interiorSettingsSchema, type ExportJobData } from '@bookbot/shared';
 import { getStorage } from '@bookbot/storage';
 import { renderCover, type CoverImageFile } from '../render/cover';
 import { renderInterior, type PuzzleContent } from '../render/interior';
@@ -90,14 +90,21 @@ export async function processExport(job: Job<ExportJobData>) {
       .where(eq(puzzleSets.projectId, project.id))
       .orderBy(asc(puzzleSets.createdAt));
 
+    const [doc] = await db
+      .select({ jsonState: projectDocs.jsonState })
+      .from(projectDocs)
+      .where(and(eq(projectDocs.projectId, project.id), eq(projectDocs.kind, 'interior')))
+      .limit(1);
+    const settings = interiorSettingsSchema.safeParse(doc?.jsonState ?? {});
+
     pdf = await renderInterior({
+      settings: settings.success ? settings.data : undefined,
       title,
       subtitle: listing?.subtitle,
       projectType: project.type,
       trimSize: project.trimSize,
       pageCount: project.pageCount,
-      // Crosswords are in the schema but not generated yet
-      puzzles: sets.filter((s) => s.type !== 'crossword').map((s) => ({ type: s.type, content: s.content }) as PuzzleContent),
+      puzzles: sets.map((s) => ({ type: s.type, content: s.content }) as PuzzleContent),
     });
   }
 

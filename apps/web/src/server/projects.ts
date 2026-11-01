@@ -1,10 +1,22 @@
 import { randomBytes } from 'node:crypto';
 import { and, count, desc, eq, sql } from 'drizzle-orm';
 import { db, exports, listings, projectDocs, projects, puzzleSets } from '@bookbot/db';
-import { generateMaze, generateSudoku, generateWordSearch, type MazeResult, type SudokuResult } from '@bookbot/puzzles';
+import {
+  generateCrossword,
+  generateMaze,
+  generateSudoku,
+  generateThemedWordSearches,
+  generateWordSearch,
+  type CrosswordResult,
+  type MazeResult,
+  type SudokuResult,
+  type WordThemeId,
+} from '@bookbot/puzzles';
 import {
   coverDesignSchema,
+  interiorSettingsSchema,
   type CoverDesign,
+  type InteriorSettings,
   type ProjectCreateInput,
   type projectUpdateSchema,
   type PuzzleCreateInput,
@@ -172,6 +184,29 @@ export async function saveCoverDesign(projectId: string, design: CoverDesign) {
   return doc;
 }
 
+// ---- Interior settings ----
+
+export async function getInteriorSettings(projectId: string): Promise<InteriorSettings> {
+  const [doc] = await db
+    .select({ jsonState: projectDocs.jsonState })
+    .from(projectDocs)
+    .where(and(eq(projectDocs.projectId, projectId), eq(projectDocs.kind, 'interior')))
+    .limit(1);
+  const parsed = interiorSettingsSchema.safeParse(doc?.jsonState ?? {});
+  return parsed.success ? parsed.data : interiorSettingsSchema.parse({});
+}
+
+export async function saveInteriorSettings(projectId: string, settings: InteriorSettings) {
+  await db
+    .insert(projectDocs)
+    .values({ projectId, kind: 'interior', jsonState: settings, version: 1 })
+    .onConflictDoUpdate({
+      target: [projectDocs.projectId, projectDocs.kind],
+      set: { jsonState: settings, version: sql`${projectDocs.version} + 1`, updatedAt: new Date() },
+    });
+  await db.update(projects).set({ updatedAt: new Date() }).where(eq(projects.id, projectId));
+}
+
 // ---- Puzzles ----
 
 /** Upper limit per project, far above what fits in a 828-page KDP book */
@@ -186,16 +221,27 @@ function serializePuzzle(row: PuzzleRow) {
     const content = row.content as SudokuResult;
     return { ...base, difficulty: content.difficulty, clues: content.clues };
   }
+  if (row.type === 'crossword') {
+    const content = row.content as CrosswordResult;
+    return {
+      ...base,
+      width: content.width,
+      height: content.height,
+      words: content.entries.map((e) => e.answer),
+      unplaced: content.unplaced,
+    };
+  }
   if (row.type === 'maze') {
     const content = row.content as MazeResult;
     return { ...base, width: content.width, height: content.height };
   }
-  const content = row.content as { solution: { word: string }[]; unplaced?: string[] };
+  const content = row.content as { title?: string; solution: { word: string }[]; unplaced?: string[] };
   const params = row.params as { width: number; height: number };
   return {
     ...base,
     width: params.width,
     height: params.height,
+    title: content.title ?? null,
     words: content.solution.map((s) => s.word),
     unplaced: content.unplaced ?? [],
   };
@@ -219,10 +265,14 @@ export async function countPuzzles(projectId: string) {
 export async function addPuzzles(projectId: string, input: PuzzleCreateInput) {
   const generate = (seed: string) => {
     switch (input.type) {
+      case 'word_search_theme':
+        throw new Error('Themed word searches are generated together');
       case 'sudoku':
         return { params: { difficulty: input.difficulty }, content: generateSudoku(seed, input.difficulty) };
       case 'maze':
         return { params: { width: input.width, height: input.height }, content: generateMaze(seed, input.width, input.height) };
+      case 'crossword':
+        return { params: { entries: input.entries }, content: generateCrossword(input.entries, seed) };
       case 'word_search':
         return {
           params: { words: input.words, width: input.width, height: input.height },
@@ -231,11 +281,24 @@ export async function addPuzzles(projectId: string, input: PuzzleCreateInput) {
     }
   };
 
-  const total = input.type === 'word_search' ? 1 : input.count;
-  const values = Array.from({ length: total }, () => {
+  let values;
+  if (input.type === 'word_search_theme') {
     const seed = randomBytes(8).toString('hex');
-    return { projectId, type: input.type, seed, ...generate(seed) };
-  });
+    const theme = input.theme as WordThemeId;
+    values = generateThemedWordSearches(theme, input.count, seed, input.size).map((content, i) => ({
+      projectId,
+      type: 'word_search' as const,
+      seed: `${seed}:${i}`,
+      params: { theme, title: content.title, width: input.size, height: input.size },
+      content,
+    }));
+  } else {
+    const total = input.type === 'word_search' || input.type === 'crossword' ? 1 : input.count;
+    values = Array.from({ length: total }, () => {
+      const seed = randomBytes(8).toString('hex');
+      return { projectId, type: input.type, seed, ...generate(seed) };
+    });
+  }
 
   // Insert one at a time so createdAt keeps them in order
   const rows: PuzzleRow[] = [];

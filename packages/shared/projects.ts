@@ -24,7 +24,7 @@ export type ProjectCreateInput = z.infer<typeof projectCreateSchema>;
 
 export const projectUpdateSchema = projectCreateSchema.omit({ orgId: true, type: true }).partial();
 
-export const PUZZLE_TYPES = ['word_search', 'sudoku', 'maze'] as const;
+export const PUZZLE_TYPES = ['word_search', 'sudoku', 'maze', 'crossword'] as const;
 export type PuzzleType = (typeof PUZZLE_TYPES)[number];
 
 export const SUDOKU_LEVELS = ['easy', 'medium', 'hard'] as const;
@@ -35,6 +35,22 @@ const wordSearchSchema = z.object({
   words: z.array(z.string().max(30)).min(1, 'Add at least one word').max(40),
   width: z.number().int().min(6).max(20).default(12),
   height: z.number().int().min(6).max(20).default(12),
+});
+
+/** Many word searches from a built-in theme; stored as word_search puzzles */
+const themedWordSearchSchema = z.object({
+  type: z.literal('word_search_theme'),
+  theme: z.string().max(50),
+  size: z.number().int().min(10).max(20).default(15),
+  count: z.number().int().min(1).max(50).default(10),
+});
+
+const crosswordSchema = z.object({
+  type: z.literal('crossword'),
+  entries: z
+    .array(z.object({ answer: z.string().trim().min(2).max(17), clue: z.string().trim().min(1, 'Every word needs a clue').max(150) }))
+    .min(4, 'Add at least 4 words')
+    .max(40, 'Use at most 40 words'),
 });
 
 const sudokuSchema = z.object({
@@ -54,7 +70,7 @@ const mazeSchema = z.object({
 export const puzzleCreateSchema = z.preprocess(
   // Requests without a type are word searches (the original API)
   (value) => (value && typeof value === 'object' && !('type' in value) ? { ...value, type: 'word_search' } : value),
-  z.discriminatedUnion('type', [wordSearchSchema, sudokuSchema, mazeSchema])
+  z.discriminatedUnion('type', [wordSearchSchema, themedWordSearchSchema, crosswordSchema, sudokuSchema, mazeSchema])
 );
 
 export type PuzzleCreateInput = z.infer<typeof puzzleCreateSchema>;
@@ -77,3 +93,42 @@ export const coverDesignSchema = z.object({
 });
 
 export type CoverDesign = z.infer<typeof coverDesignSchema>;
+
+/** Pages that fill a book after its puzzles (all of a journal) */
+export const PAGE_TEMPLATES = ['blank', 'lined', 'dotted', 'grid', 'gratitude', 'daily_planner'] as const;
+export type PageTemplate = (typeof PAGE_TEMPLATES)[number];
+
+/** How the interior PDF is laid out, saved per project */
+export const interiorSettingsSchema = z.object({
+  version: z.literal(1).default(1),
+  /** Solutions at the back of the book, or none */
+  solutions: z.enum(['back', 'none']).default('back'),
+  /** A rules page before the first puzzle of each type */
+  howToPlay: z.boolean().default(true),
+  /** Bigger text and bolder lines, for readers with low vision */
+  largePrint: z.boolean().default(false),
+  /** Unset: lined for journals, blank otherwise */
+  pageTemplate: z.enum(PAGE_TEMPLATES).optional(),
+  lineSpacing: z.enum(['college', 'wide']).default('wide'),
+});
+
+export type InteriorSettings = z.infer<typeof interiorSettingsSchema>;
+
+export function resolvePageTemplate(settings: InteriorSettings, projectType: (typeof PROJECT_TYPES)[number]): PageTemplate {
+  return settings.pageTemplate ?? (projectType === 'journal' ? 'lined' : 'blank');
+}
+
+/**
+ * A listing as saved. Limits are loose so drafts always save; checkListing
+ * (in @bookbot/core) reports what KDP would reject.
+ */
+export const listingUpdateSchema = z.object({
+  title: z.string().trim().min(1, 'Title is required').max(255),
+  subtitle: z.string().trim().max(255).default(''),
+  author: z.string().trim().max(255).default(''),
+  description: z.string().max(10_000).default(''),
+  keywords: z.array(z.string().trim().max(100)).max(7).default([]),
+  categories: z.array(z.string().trim().max(200)).max(3).default([]),
+});
+
+export type ListingUpdate = z.infer<typeof listingUpdateSchema>;

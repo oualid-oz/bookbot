@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { PaletteIcon, Trash2Icon } from 'lucide-react';
+import { PaletteIcon, StoreIcon, Trash2Icon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,7 @@ import { apiFetch } from '@/lib/api-client';
 import { PROJECT_TYPE_LABELS, TRIM_OPTIONS, type ProjectSummary } from '@/components/project-options';
 import { DetailsCard } from './details-card';
 import { ExportsCard } from './exports-card';
+import { InteriorCard } from './interior-card';
 import { PuzzlesCard } from './puzzles-card';
 
 export default function ProjectPage() {
@@ -73,6 +74,12 @@ export default function ProjectPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild>
+            <Link href={`/projects/${id}/listing`}>
+              <StoreIcon />
+              Amazon listing
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
             <Link href={`/projects/${id}/cover`}>
               <PaletteIcon />
               Design cover
@@ -104,7 +111,10 @@ export default function ProjectPage() {
 
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-2">
-          <DetailsCard key={project.updatedAt} project={project} onSaved={setProject} />
+          <div className="flex flex-col gap-6">
+            <DetailsCard key={project.updatedAt} project={project} onSaved={setProject} />
+            <InteriorCard project={project} />
+          </div>
         </div>
         <div className="flex flex-col gap-6 lg:col-span-3">
           <ExportsCard projectId={project.id} />

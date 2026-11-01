@@ -1,11 +1,13 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { db, projects, puzzleSets } from '@bookbot/db';
+import { db, projects, puzzleSets, savedNiches } from '@bookbot/db';
 import { GET as listProjects, POST as createProject } from '@/app/api/projects/route';
 import { DELETE as deleteProject, GET as getProject, PATCH as updateProject } from '@/app/api/projects/[id]/route';
 import { GET as getCover, PUT as saveCover } from '@/app/api/projects/[id]/cover/route';
 import { GET as listPuzzles, POST as addPuzzle } from '@/app/api/projects/[id]/puzzles/route';
 import { DELETE as deletePuzzle } from '@/app/api/projects/[id]/puzzles/[puzzleId]/route';
+import { GET as getInterior, PUT as saveInterior } from '@/app/api/projects/[id]/interior/route';
+import { GET as getListing, PUT as saveListing } from '@/app/api/projects/[id]/listing/route';
 import { createUser, json, params, request, resetDatabase, signInAs, type TestUser } from './helpers';
 
 let alice: TestUser;
@@ -144,6 +146,46 @@ describe('puzzles', () => {
     expect(puzzle).toMatchObject({ type: 'maze', width: 10, height: 12 });
   });
 
+  it('adds themed word searches, one topic per puzzle', async () => {
+    signInAs(alice);
+    const ctx = params({ id: projectId });
+    const res = await addPuzzle(request('/x', { method: 'POST', body: { type: 'word_search_theme', theme: 'holidays', size: 15, count: 4 } }), ctx);
+    expect(res.status).toBe(201);
+    const { puzzles } = await json<{ puzzles: { type: string; title: string; words: string[]; width: number }[] }>(res);
+    expect(puzzles).toHaveLength(4);
+    expect(new Set(puzzles.map((p) => p.title)).size).toBe(4);
+    expect(puzzles.every((p) => p.type === 'word_search' && p.width === 15 && p.words.length >= 15)).toBe(true);
+
+    const unknown = await addPuzzle(request('/x', { method: 'POST', body: { type: 'word_search_theme', theme: 'nope' } }), ctx);
+    expect(unknown.status).toBe(400);
+  });
+
+  it('adds a crossword from words and clues', async () => {
+    signInAs(alice);
+    const entries = [
+      ['elephant', 'Largest land animal'], ['giraffe', 'Tallest animal'], ['penguin', 'Swimming bird'],
+      ['tiger', 'Striped big cat'], ['zebra', 'Striped horse'], ['rabbit', 'Long-eared hopper'],
+    ].map(([answer, clue]) => ({ answer, clue }));
+    const res = await addPuzzle(request('/x', { method: 'POST', body: { type: 'crossword', entries } }), params({ id: projectId }));
+    expect(res.status).toBe(201);
+    const { puzzle } = await json<{ puzzle: { type: string; words: string[]; unplaced: string[] } }>(res);
+    expect(puzzle.type).toBe('crossword');
+    expect([...puzzle.words, ...puzzle.unplaced].sort()).toEqual(['ELEPHANT', 'GIRAFFE', 'PENGUIN', 'RABBIT', 'TIGER', 'ZEBRA']);
+    const [row] = await db.select().from(puzzleSets).where(eq(puzzleSets.type, 'crossword'));
+    expect((row.content as { entries: { clue: string }[] }).entries.map((e) => e.clue)).toContain('Striped big cat');
+  });
+
+  it('rejects crosswords without enough words or clues', async () => {
+    signInAs(alice);
+    const ctx = params({ id: projectId });
+    const few = [{ answer: 'cat', clue: 'Pet' }, { answer: 'dog', clue: 'Pet' }, { answer: 'owl', clue: 'Bird' }];
+    expect((await addPuzzle(request('/x', { method: 'POST', body: { type: 'crossword', entries: few } }), ctx)).status).toBe(400);
+    const dupes = [...few, { answer: 'CAT!', clue: 'Again' }];
+    expect((await addPuzzle(request('/x', { method: 'POST', body: { type: 'crossword', entries: dupes } }), ctx)).status).toBe(400);
+    const noClue = [...few, { answer: 'emu', clue: ' ' }];
+    expect((await addPuzzle(request('/x', { method: 'POST', body: { type: 'crossword', entries: noClue } }), ctx)).status).toBe(400);
+  });
+
   it('validates puzzle options', async () => {
     signInAs(alice);
     const ctx = params({ id: projectId });
@@ -152,6 +194,7 @@ describe('puzzles', () => {
       { type: 'sudoku', count: 51 },
       { type: 'maze', width: 2 },
       { type: 'crossword' },
+      { type: 'jigsaw' },
     ];
     for (const body of bad) {
       expect((await addPuzzle(request('/x', { method: 'POST', body }), ctx)).status, JSON.stringify(body)).toBe(400);
@@ -178,5 +221,72 @@ describe('puzzles', () => {
     signInAs(bob);
     const res = await deletePuzzle(request('/x', { method: 'DELETE' }), params({ id: projectId, puzzleId: puzzles[0].id }));
     expect(res.status).toBe(404);
+  });
+});
+
+describe('interior settings', () => {
+  it('starts with defaults, saves changes and validates them', async () => {
+    signInAs(alice);
+    const ctx = params({ id: projectId });
+    const initial = await json<{ settings: Record<string, unknown> }>(await getInterior(request('/x'), ctx));
+    expect(initial.settings).toEqual({ version: 1, solutions: 'back', howToPlay: true, largePrint: false, lineSpacing: 'wide' });
+
+    const body = { solutions: 'none', largePrint: true, pageTemplate: 'daily_planner', lineSpacing: 'college' };
+    expect((await saveInterior(request('/x', { method: 'PUT', body }), ctx)).status).toBe(200);
+    const after = await json<{ settings: Record<string, unknown> }>(await getInterior(request('/x'), ctx));
+    expect(after.settings).toMatchObject(body);
+
+    const bad = await saveInterior(request('/x', { method: 'PUT', body: { pageTemplate: 'wallpaper' } }), ctx);
+    expect(bad.status).toBe(400);
+  });
+
+  it("hides other organizations' projects", async () => {
+    signInAs(bob);
+    const ctx = params({ id: projectId });
+    expect((await getInterior(request('/x'), ctx)).status).toBe(404);
+    expect((await saveInterior(request('/x', { method: 'PUT', body: {} }), ctx)).status).toBe(404);
+  });
+});
+
+describe('listing', () => {
+  type ListingResponse = { listing: Record<string, unknown>; issues: { field: string; level: string }[]; suggestions: string[] };
+
+  it('saves the listing, reports KDP problems and suggests saved keywords', async () => {
+    signInAs(alice);
+    const ctx = params({ id: projectId });
+    await db.insert(savedNiches).values({ orgId: alice.orgId, keyword: 'farm animal puzzles' });
+
+    const current = await json<{ project: { title: string } }>(await getProject(request('/x'), ctx));
+    const before = await json<ListingResponse>(await getListing(request('/x'), ctx));
+    expect(before.listing.title).toBe(current.project.title);
+    expect(before.issues.some((i) => i.field === 'author' && i.level === 'error')).toBe(true);
+    expect(before.suggestions).toContain('farm animal puzzles');
+
+    const body = {
+      title: 'Animal Word Search',
+      subtitle: 'Bestseller puzzles for kids',
+      author: 'Maya Brooks',
+      description: '<p>Fun puzzles.</p>',
+      keywords: ['farm animal puzzles', 'gift for kids'],
+      categories: ['Games › Word Search'],
+    };
+    const res = await saveListing(request('/x', { method: 'PUT', body }), ctx);
+    expect(res.status).toBe(200);
+    const saved = await json<ListingResponse>(res);
+    expect(saved.listing).toMatchObject(body);
+    expect(saved.issues.filter((i) => i.level === 'error').map((i) => i.field)).toEqual(['subtitle']);
+
+    // The project title follows the listing
+    const { project } = await json<{ project: { title: string; subtitle: string } }>(await getProject(request('/x'), ctx));
+    expect(project).toMatchObject({ title: 'Animal Word Search', subtitle: body.subtitle });
+  });
+
+  it('validates input and hides other organizations', async () => {
+    signInAs(alice);
+    const ctx = params({ id: projectId });
+    expect((await saveListing(request('/x', { method: 'PUT', body: { title: '' } }), ctx)).status).toBe(400);
+    expect((await saveListing(request('/x', { method: 'PUT', body: { title: 'x', keywords: Array(8).fill('k') } }), ctx)).status).toBe(400);
+    signInAs(bob);
+    expect((await getListing(request('/x'), ctx)).status).toBe(404);
   });
 });

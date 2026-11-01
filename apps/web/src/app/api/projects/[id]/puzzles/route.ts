@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { puzzleCreateSchema } from '@bookbot/shared';
-import { normalizeWords } from '@bookbot/puzzles';
+import { normalizeWords, WORD_THEMES } from '@bookbot/puzzles';
 import { errorResponse, readJson } from '@/server/org-access';
 import { addPuzzles, countPuzzles, listPuzzles, MAX_PUZZLES_PER_PROJECT, requireProjectAccess } from '@/server/projects';
 
@@ -24,8 +24,18 @@ export async function POST(req: NextRequest, ctx: RouteContext<'/api/projects/[i
     return errorResponse(400, 'Invalid input', { fields: { words: ['Words must contain letters A-Z'] } });
   }
 
+  if (input.type === 'crossword') {
+    const answers = normalizeWords(input.entries.map((e) => e.answer));
+    if (answers.length < 4) {
+      return errorResponse(400, 'Invalid input', { fields: { entries: ['Add at least 4 different words (letters A-Z)'] } });
+    }
+  }
+  if (input.type === 'word_search_theme' && !(input.theme in WORD_THEMES)) {
+    return errorResponse(400, 'Invalid input', { fields: { theme: ['Unknown theme'] } });
+  }
+
   const projectId = result.value.project.id;
-  const adding = input.type === 'word_search' ? 1 : input.count;
+  const adding = input.type === 'word_search' || input.type === 'crossword' ? 1 : input.count;
   if ((await countPuzzles(projectId)) + adding > MAX_PUZZLES_PER_PROJECT) {
     return errorResponse(400, `A project can hold at most ${MAX_PUZZLES_PER_PROJECT} puzzles`);
   }
