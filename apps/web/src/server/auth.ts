@@ -76,6 +76,13 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: '/login',
   },
+  logger: {
+    error(code, metadata) {
+      // A revoked session (password change, "sign out other devices") is expected, not an error
+      if (code === 'JWT_SESSION_ERROR' && (metadata as { message?: string })?.message === 'Session revoked') return;
+      console.error(`[next-auth][error][${code}]`, metadata);
+    },
+  },
   providers,
   callbacks: {
     async signIn({ user, account, profile }) {

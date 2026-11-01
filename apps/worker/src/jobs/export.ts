@@ -5,7 +5,7 @@ import { assets, db, exports, listings, projectDocs, projects, puzzleSets } from
 import { EXPORT_QUEUE, coverDesignSchema, exportSpecSchema, type ExportJobData } from '@bookbot/shared';
 import { getStorage } from '@bookbot/storage';
 import { renderCover, type CoverImageFile } from '../render/cover';
-import { renderInterior, type WordSearchContent } from '../render/interior';
+import { renderInterior, type PuzzleContent } from '../render/interior';
 
 // BullMQ workers use blocking commands, which require maxRetriesPerRequest: null
 export const connection = new Redis(process.env.REDIS_URL!, { maxRetriesPerRequest: null });
@@ -96,7 +96,8 @@ export async function processExport(job: Job<ExportJobData>) {
       projectType: project.type,
       trimSize: project.trimSize,
       pageCount: project.pageCount,
-      puzzles: sets.filter((s) => s.type === 'word_search').map((s) => s.content as WordSearchContent),
+      // Crosswords are in the schema but not generated yet
+      puzzles: sets.filter((s) => s.type !== 'crossword').map((s) => ({ type: s.type, content: s.content }) as PuzzleContent),
     });
   }
 

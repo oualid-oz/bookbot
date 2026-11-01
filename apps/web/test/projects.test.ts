@@ -1,4 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { db, projects, puzzleSets } from '@bookbot/db';
 import { GET as listProjects, POST as createProject } from '@/app/api/projects/route';
 import { DELETE as deleteProject, GET as getProject, PATCH as updateProject } from '@/app/api/projects/[id]/route';
 import { GET as getCover, PUT as saveCover } from '@/app/api/projects/[id]/cover/route';
@@ -113,6 +115,59 @@ describe('puzzles', () => {
     signInAs(alice);
     const res = await addPuzzle(request('/x', { method: 'POST', body: { words: ['123', '!!'] } }), params({ id: projectId }));
     expect(res.status).toBe(400);
+  });
+
+  it('adds several sudoku at once, in order, with the chosen difficulty', async () => {
+    signInAs(alice);
+    const ctx = params({ id: projectId });
+    const res = await addPuzzle(request('/x', { method: 'POST', body: { type: 'sudoku', difficulty: 'easy', count: 3 } }), ctx);
+    expect(res.status).toBe(201);
+    const { puzzles: added } = await json<{ puzzles: { id: string; type: string; difficulty: string; clues: number }[] }>(res);
+    expect(added).toHaveLength(3);
+    expect(added.every((p) => p.type === 'sudoku' && p.difficulty === 'easy' && p.clues === 40)).toBe(true);
+    // Each one is a different puzzle
+    const rows = await db.select().from(puzzleSets).where(eq(puzzleSets.type, 'sudoku'));
+    expect(new Set(rows.map((r) => JSON.stringify((r.content as { puzzle: number[][] }).puzzle))).size).toBe(3);
+
+    const { puzzles } = await json<{ puzzles: { id: string }[] }>(await listPuzzles(request('/x'), ctx));
+    expect(puzzles.slice(-3).map((p) => p.id)).toEqual(added.map((p) => p.id));
+  });
+
+  it('adds mazes of the chosen size', async () => {
+    signInAs(alice);
+    const res = await addPuzzle(
+      request('/x', { method: 'POST', body: { type: 'maze', width: 10, height: 12 } }),
+      params({ id: projectId })
+    );
+    expect(res.status).toBe(201);
+    const { puzzle } = await json<{ puzzle: { type: string; width: number; height: number } }>(res);
+    expect(puzzle).toMatchObject({ type: 'maze', width: 10, height: 12 });
+  });
+
+  it('validates puzzle options', async () => {
+    signInAs(alice);
+    const ctx = params({ id: projectId });
+    const bad = [
+      { type: 'sudoku', difficulty: 'impossible' },
+      { type: 'sudoku', count: 51 },
+      { type: 'maze', width: 2 },
+      { type: 'crossword' },
+    ];
+    for (const body of bad) {
+      expect((await addPuzzle(request('/x', { method: 'POST', body }), ctx)).status, JSON.stringify(body)).toBe(400);
+    }
+  });
+
+  it('caps the number of puzzles in a project', async () => {
+    signInAs(alice);
+    const [project] = await db
+      .insert(projects)
+      .values({ orgId: alice.orgId, title: 'Big book', type: 'puzzle_book', trimSize: '6x9', pageCount: 24 })
+      .returning();
+    const ctx = params({ id: project.id });
+    const add = (count: number) => addPuzzle(request('/x', { method: 'POST', body: { type: 'maze', width: 5, height: 5, count } }), ctx);
+    for (let i = 0; i < 6; i++) expect((await add(50)).status).toBe(201);
+    expect((await add(1)).status).toBe(400);
   });
 
   it("can't delete another project's puzzle", async () => {

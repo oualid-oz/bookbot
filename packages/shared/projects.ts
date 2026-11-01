@@ -24,12 +24,40 @@ export type ProjectCreateInput = z.infer<typeof projectCreateSchema>;
 
 export const projectUpdateSchema = projectCreateSchema.omit({ orgId: true, type: true }).partial();
 
+export const PUZZLE_TYPES = ['word_search', 'sudoku', 'maze'] as const;
+export type PuzzleType = (typeof PUZZLE_TYPES)[number];
+
+export const SUDOKU_LEVELS = ['easy', 'medium', 'hard'] as const;
+
 /** Grid sizes are capped so a puzzle still fits on the smallest trim size */
-export const puzzleCreateSchema = z.object({
+const wordSearchSchema = z.object({
+  type: z.literal('word_search'),
   words: z.array(z.string().max(30)).min(1, 'Add at least one word').max(40),
   width: z.number().int().min(6).max(20).default(12),
   height: z.number().int().min(6).max(20).default(12),
 });
+
+const sudokuSchema = z.object({
+  type: z.literal('sudoku'),
+  difficulty: z.enum(SUDOKU_LEVELS).default('medium'),
+  /** Several puzzles at once, since sudoku books hold dozens */
+  count: z.number().int().min(1).max(50).default(1),
+});
+
+const mazeSchema = z.object({
+  type: z.literal('maze'),
+  width: z.number().int().min(5).max(40).default(15),
+  height: z.number().int().min(5).max(50).default(20),
+  count: z.number().int().min(1).max(50).default(1),
+});
+
+export const puzzleCreateSchema = z.preprocess(
+  // Requests without a type are word searches (the original API)
+  (value) => (value && typeof value === 'object' && !('type' in value) ? { ...value, type: 'word_search' } : value),
+  z.discriminatedUnion('type', [wordSearchSchema, sudokuSchema, mazeSchema])
+);
+
+export type PuzzleCreateInput = z.infer<typeof puzzleCreateSchema>;
 
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a #rrggbb color');
 

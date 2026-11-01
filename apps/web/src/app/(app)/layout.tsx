@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
 import { eq } from 'drizzle-orm';
 import { db, users } from '@bookbot/db';
 import { getCurrentUser } from '@/lib/auth';
@@ -54,15 +55,20 @@ function PageSkeleton() {
   );
 }
 
-/** Banner for users who haven't verified their email yet */
+/**
+ * Banner for users who haven't verified their email yet. Also sends revoked
+ * sessions to login: the proxy only checks that the cookie decodes, so a
+ * session signed out from another device still reaches this layout.
+ */
 async function EmailVerificationNotice() {
   const user = await getCurrentUser();
-  if (!user?.id) return null;
+  if (!user?.id) redirect('/login');
   const [row] = await db.select({ email: users.email, emailVerified: users.emailVerified }).from(users).where(eq(users.id, user.id));
   return row && !row.emailVerified ? <VerifyEmailBanner email={row.email} /> : null;
 }
 
 async function SidebarUser() {
+  "use server";
   const user = await getCurrentUser();
   if (!user) return null;
   return <NavUser user={user} />;

@@ -62,6 +62,15 @@ export async function sendVerificationEmail(email: string) {
   });
 }
 
+/** Security notice, so the owner learns if someone else changed it */
+export async function sendPasswordChangedEmail(email: string) {
+  await sendEmail({
+    to: email,
+    subject: 'Your Bookbot password was changed',
+    text: `The password for your Bookbot account was just changed, and your other devices were signed out.\n\nIf this wasn't you, reset your password now:\n\n${appUrl('/forgot-password')}`,
+  });
+}
+
 export async function sendPasswordResetEmail(email: string) {
   const token = await issueToken('reset', email);
   await sendEmail({

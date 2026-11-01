@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db, users, accounts, organizations, memberships } from '@bookbot/db';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -128,6 +128,18 @@ export async function createPasswordUser(input: {
 export async function getSessionVersion(userId: string): Promise<number | null> {
   const [user] = await db.select({ sessionVersion: users.sessionVersion }).from(users).where(eq(users.id, userId)).limit(1);
   return user?.sessionVersion ?? null;
+}
+
+/**
+ * Sign out every session of the user. Returns the new session version.
+ */
+export async function bumpSessionVersion(userId: string, changes: Partial<typeof users.$inferInsert> = {}): Promise<number> {
+  const [user] = await db
+    .update(users)
+    .set({ ...changes, sessionVersion: sql`${users.sessionVersion} + 1`, updatedAt: new Date() })
+    .where(eq(users.id, userId))
+    .returning({ sessionVersion: users.sessionVersion });
+  return user.sessionVersion;
 }
 
 /**

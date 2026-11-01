@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { signOut } from "next-auth/react"
-import { ChevronsUpDownIcon, LogOutIcon, SparklesIcon } from "lucide-react"
+import { ChevronsUpDownIcon, LogOutIcon, SparklesIcon, UserRoundIcon } from "lucide-react"
 
 import {
   Avatar,
@@ -88,6 +88,12 @@ export function NavUser({ user }: NavUserProps) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
+              <DropdownMenuItem asChild>
+                <Link href="/settings/account">
+                  <UserRoundIcon />
+                  Account
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/settings/billing">
                   <SparklesIcon />

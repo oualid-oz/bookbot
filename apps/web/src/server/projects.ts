@@ -1,16 +1,17 @@
 import { randomBytes } from 'node:crypto';
 import { and, count, desc, eq, sql } from 'drizzle-orm';
 import { db, exports, listings, projectDocs, projects, puzzleSets } from '@bookbot/db';
-import { generateWordSearch } from '@bookbot/puzzles';
+import { generateMaze, generateSudoku, generateWordSearch, type MazeResult, type SudokuResult } from '@bookbot/puzzles';
 import {
   coverDesignSchema,
   type CoverDesign,
   type ProjectCreateInput,
   type projectUpdateSchema,
-  type puzzleCreateSchema,
+  type PuzzleCreateInput,
 } from '@bookbot/shared';
 import type { z } from 'zod';
 import { errorResponse, isUuid, requireOrgAccess, type OrgAccess } from './org-access';
+import { deleteStoredFiles } from './stored-files';
 
 type Project = typeof projects.$inferSelect;
 type Listing = typeof listings.$inferSelect;
@@ -131,7 +132,9 @@ export async function updateProject(
 }
 
 export async function deleteProject(projectId: string) {
+  const files = await db.select({ key: exports.r2Key }).from(exports).where(eq(exports.projectId, projectId));
   await db.delete(projects).where(eq(projects.id, projectId));
+  await deleteStoredFiles(files.map((f) => f.key));
 }
 
 // ---- Cover design ----
@@ -171,44 +174,78 @@ export async function saveCoverDesign(projectId: string, design: CoverDesign) {
 
 // ---- Puzzles ----
 
+/** Upper limit per project, far above what fits in a 828-page KDP book */
+export const MAX_PUZZLES_PER_PROJECT = 300;
+
+type PuzzleRow = typeof puzzleSets.$inferSelect;
+
+/** Summary of a puzzle for the project page */
+function serializePuzzle(row: PuzzleRow) {
+  const base = { id: row.id, type: row.type, createdAt: row.createdAt };
+  if (row.type === 'sudoku') {
+    const content = row.content as SudokuResult;
+    return { ...base, difficulty: content.difficulty, clues: content.clues };
+  }
+  if (row.type === 'maze') {
+    const content = row.content as MazeResult;
+    return { ...base, width: content.width, height: content.height };
+  }
+  const content = row.content as { solution: { word: string }[]; unplaced?: string[] };
+  const params = row.params as { width: number; height: number };
+  return {
+    ...base,
+    width: params.width,
+    height: params.height,
+    words: content.solution.map((s) => s.word),
+    unplaced: content.unplaced ?? [],
+  };
+}
+
 export async function listPuzzles(projectId: string) {
   const rows = await db
     .select()
     .from(puzzleSets)
     .where(eq(puzzleSets.projectId, projectId))
     .orderBy(puzzleSets.createdAt);
-
-  return rows.map((row) => {
-    const content = row.content as { solution: { word: string }[]; unplaced?: string[] };
-    const params = row.params as { width: number; height: number };
-    return {
-      id: row.id,
-      type: row.type,
-      width: params.width,
-      height: params.height,
-      words: content.solution.map((s) => s.word),
-      unplaced: content.unplaced ?? [],
-      createdAt: row.createdAt,
-    };
-  });
+  return rows.map(serializePuzzle);
 }
 
-export async function addWordSearch(projectId: string, input: z.infer<typeof puzzleCreateSchema>) {
-  const seed = randomBytes(8).toString('hex');
-  const content = generateWordSearch(input.words, seed, input.width, input.height);
+export async function countPuzzles(projectId: string) {
+  const [row] = await db.select({ n: count() }).from(puzzleSets).where(eq(puzzleSets.projectId, projectId));
+  return row.n;
+}
 
-  const [row] = await db
-    .insert(puzzleSets)
-    .values({
-      projectId,
-      type: 'word_search',
-      seed,
-      params: { words: input.words, width: input.width, height: input.height },
-      content,
-    })
-    .returning({ id: puzzleSets.id });
+/** Generate and store puzzles; sudoku and mazes can be made several at a time */
+export async function addPuzzles(projectId: string, input: PuzzleCreateInput) {
+  const generate = (seed: string) => {
+    switch (input.type) {
+      case 'sudoku':
+        return { params: { difficulty: input.difficulty }, content: generateSudoku(seed, input.difficulty) };
+      case 'maze':
+        return { params: { width: input.width, height: input.height }, content: generateMaze(seed, input.width, input.height) };
+      case 'word_search':
+        return {
+          params: { words: input.words, width: input.width, height: input.height },
+          content: generateWordSearch(input.words, seed, input.width, input.height),
+        };
+    }
+  };
 
-  return { id: row.id, words: content.solution.map((s) => s.word), unplaced: content.unplaced };
+  const total = input.type === 'word_search' ? 1 : input.count;
+  const values = Array.from({ length: total }, () => {
+    const seed = randomBytes(8).toString('hex');
+    return { projectId, type: input.type, seed, ...generate(seed) };
+  });
+
+  // Insert one at a time so createdAt keeps them in order
+  const rows: PuzzleRow[] = [];
+  await db.transaction(async (tx) => {
+    for (const value of values) {
+      const [row] = await tx.insert(puzzleSets).values({ ...value, createdAt: new Date(Date.now() + rows.length) }).returning();
+      rows.push(row);
+    }
+  });
+  return rows.map(serializePuzzle);
 }
 
 export async function deletePuzzle(projectId: string, puzzleId: string) {
