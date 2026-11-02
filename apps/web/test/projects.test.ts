@@ -235,6 +235,7 @@ describe('interior settings', () => {
       howToPlay: true,
       largePrint: false,
       lineSpacing: 'wide',
+      typography: { headingFont: 'helvetica', bodyFont: 'helvetica', puzzleFont: 'courier', headingColor: '#000000', textColor: '#000000' },
       decor: {
         border: 'none',
         borderColor: '#333333',
@@ -254,6 +255,22 @@ describe('interior settings', () => {
 
     const bad = await saveInterior(request('/x', { method: 'PUT', body: { pageTemplate: 'wallpaper' } }), ctx);
     expect(bad.status).toBe(400);
+  });
+
+  it('saves fonts and colors, keeping decorative fonts for titles only', async () => {
+    signInAs(alice);
+    const ctx = params({ id: projectId });
+    const save = (typography: Record<string, unknown>) => saveInterior(request('/x', { method: 'PUT', body: { typography } }), ctx);
+
+    const chosen = { headingFont: 'lobster', bodyFont: 'lato', puzzleFont: 'comicneue', headingColor: '#be123c', textColor: '#1f2937' };
+    expect((await save(chosen)).status).toBe(200);
+    const { settings } = await json<{ settings: { typography: Record<string, unknown> } }>(await getInterior(request('/x'), ctx));
+    expect(settings.typography).toEqual(chosen);
+
+    expect((await save({ bodyFont: 'lobster' })).status).toBe(400);
+    expect((await save({ puzzleFont: 'pacifico' })).status).toBe(400);
+    expect((await save({ headingFont: 'wingdings' })).status).toBe(400);
+    expect((await save({ headingColor: 'red' })).status).toBe(400);
   });
 
   it('saves page decorations and only accepts your own finished images', async () => {

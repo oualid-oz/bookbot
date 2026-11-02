@@ -7,6 +7,7 @@ COPY package.json package-lock.json ./
 COPY apps/worker/package.json apps/worker/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
+COPY packages/fonts/package.json packages/fonts/
 COPY packages/shared/package.json packages/shared/
 COPY packages/storage/package.json packages/storage/
 # Retry flaky registry connections; the cache mount reuses downloads across builds
@@ -15,6 +16,7 @@ RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev --workspace=worker --
 
 COPY packages/core packages/core
 COPY packages/db packages/db
+COPY packages/fonts packages/fonts
 COPY packages/shared packages/shared
 COPY packages/storage packages/storage
 COPY apps/worker apps/worker

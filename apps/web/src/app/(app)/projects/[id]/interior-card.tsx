@@ -14,6 +14,7 @@ import { apiFetch } from '@/lib/api-client';
 import type { ProjectSummary } from '@/components/project-options';
 import type { UploadedImage } from './cover/image-field';
 import { PageDesignFields } from './page-design';
+import { TypographyFields } from './typography-fields';
 
 const TEMPLATE_NAMES: Record<PageTemplate, string> = {
   blank: 'Blank',
@@ -44,6 +45,8 @@ export function InteriorCard({ project }: { project: ProjectSummary }) {
 
   const update = (changes: Partial<InteriorSettings>) => setSettings({ ...settings, ...changes });
   const updateDecor = (changes: Partial<InteriorSettings['decor']>) => update({ decor: { ...settings.decor, ...changes } });
+  const updateTypography = (changes: Partial<InteriorSettings['typography']>) =>
+    update({ typography: { ...settings.typography, ...changes } });
   const isJournal = project.type === 'journal';
   const template = settings.pageTemplate ?? (isJournal ? 'lined' : 'blank');
   const ruled = ['lined', 'gratitude', 'daily_planner'].includes(template);
@@ -115,6 +118,9 @@ export function InteriorCard({ project }: { project: ProjectSummary }) {
               {toggle('solutions', 'Solutions', 'Answers to every puzzle at the back of the book.', settings.solutions === 'back', (v) => update({ solutions: v ? 'back' : 'none' }))}
             </>
           )}
+
+          <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">Text</FieldSeparator>
+          <TypographyFields project={project} typography={settings.typography} onChange={updateTypography} />
 
           <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">Page design</FieldSeparator>
           <PageDesignFields project={project} decor={settings.decor} image={image} onChange={updateDecor}

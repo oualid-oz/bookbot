@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
   // so workspace packages are included (builds run from apps/web)
   output: "standalone",
   outputFileTracingRoot: path.resolve(process.cwd(), "../.."),
+  // Font files are read from disk by /fonts/[file], so tracing can't find them
+  outputFileTracingIncludes: {
+    "/fonts/[file]": ["../../packages/fonts/files/*.ttf"],
+  },
   /* config options here */
   experimental: {
     agentFeedback: true,
@@ -20,7 +24,7 @@ const nextConfig: NextConfig = {
       },
     },
   },
-  transpilePackages: ['@bookbot/db', '@bookbot/core', '@bookbot/puzzles', '@bookbot/shared', '@bookbot/storage'],
+  transpilePackages: ['@bookbot/db', '@bookbot/core', '@bookbot/fonts', '@bookbot/puzzles', '@bookbot/shared', '@bookbot/storage'],
   // Queue client stays a plain Node dependency rather than being bundled
   serverExternalPackages: ['bullmq'],
   // The cover editor moved into each project

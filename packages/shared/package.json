@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@bookbot/core": "*",
-    "zod": "^3.23.0"
+    "zod": "^3.23.0",
+    "@bookbot/fonts": "*"
   },
   "devDependencies": {
     "@types/node": "^20",

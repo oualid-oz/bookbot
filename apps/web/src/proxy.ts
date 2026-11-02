@@ -15,6 +15,6 @@ export default withAuth({
 
 export const config = {
   // API routes check auth themselves (and the extension uses bearer tokens);
-  // icons and the web manifest must load for signed-out visitors too
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|icon-\\d+\\.png|manifest.webmanifest).*)'],
+  // icons, fonts and the web manifest must load for signed-out visitors too
+  matcher: ['/((?!api|fonts/|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|icon-\\d+\\.png|manifest.webmanifest).*)'],
 };

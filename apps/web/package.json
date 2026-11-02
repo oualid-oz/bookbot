@@ -13,6 +13,7 @@
   "dependencies": {
     "@bookbot/core": "*",
     "@bookbot/db": "*",
+    "@bookbot/fonts": "*",
     "@bookbot/puzzles": "*",
     "@bookbot/shared": "*",
     "@bookbot/storage": "*",

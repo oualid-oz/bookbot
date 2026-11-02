@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BACKGROUND_INTENSITIES, BACKGROUND_PATTERNS, BORDER_STYLES, TRIM_SIZES } from '@bookbot/core';
+import { BODY_FONT_IDS, FONT_IDS } from '@bookbot/fonts';
 
 export const PROJECT_TYPES = ['book', 'puzzle_book', 'journal'] as const;
 export const PAPER_TYPES = ['white', 'cream', 'color'] as const;
@@ -110,6 +111,18 @@ export const interiorSettingsSchema = z.object({
   /** Unset: lined for journals, blank otherwise */
   pageTemplate: z.enum(PAGE_TEMPLATES).optional(),
   lineSpacing: z.enum(['college', 'wide']).default('wide'),
+  /** Fonts and colors of the text */
+  typography: z
+    .object({
+      /** Title page and page headings */
+      headingFont: z.enum(FONT_IDS).default('helvetica'),
+      bodyFont: z.enum(FONT_IDS).refine((id) => BODY_FONT_IDS.includes(id), 'Pick a font made for longer text').default('helvetica'),
+      /** Letters in word search and crossword grids */
+      puzzleFont: z.enum(FONT_IDS).refine((id) => BODY_FONT_IDS.includes(id), 'Pick a font made for longer text').default('courier'),
+      headingColor: hexColor.default('#000000'),
+      textColor: hexColor.default('#000000'),
+    })
+    .default({}),
   /** Border, background pattern and image on every page with content */
   decor: z
     .object({

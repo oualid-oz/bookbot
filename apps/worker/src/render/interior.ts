@@ -1,4 +1,7 @@
-import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb, type RGB } from 'pdf-lib';
+import { FONTS, type FontId, type FontInfo } from '@bookbot/fonts';
+import { readFontFile } from '@bookbot/fonts/load';
 import { FRAME_PADDING, TRIM_SIZES, decorationFrame, getMinimumInsideMargin, pageDecorations, printColor, type DecorShape } from '@bookbot/core';
 import { interiorSettingsSchema, resolvePageTemplate, type InteriorSettings, type PageTemplate } from '@bookbot/shared';
 import { wrapText } from './cover';
@@ -87,9 +90,16 @@ interface Layout {
   width: number;
   height: number;
   inside: number;
+  /** Body text */
   regular: PDFFont;
   bold: PDFFont;
+  /** Letters in word search and crossword grids */
   mono: PDFFont;
+  /** Title page and page headings */
+  heading: PDFFont;
+  headingColor: RGB;
+  /** Color of all other text */
+  text: RGB;
   /** Text and line size multiplier (large print) */
   scale: number;
   decor: InteriorSettings['decor'];
@@ -116,9 +126,7 @@ export async function renderInterior(input: InteriorInput): Promise<Uint8Array> 
     width: inches(trim.width),
     height: inches(trim.height),
     inside: inches(getMinimumInsideMargin(input.pageCount)),
-    regular: await doc.embedFont(StandardFonts.Helvetica),
-    bold: await doc.embedFont(StandardFonts.HelveticaBold),
-    mono: await doc.embedFont(StandardFonts.CourierBold),
+    ...(await typographyLayout(doc, input)),
     scale: 1,
     ...(await decorLayout(doc, input)),
   };
@@ -168,6 +176,45 @@ export async function renderInterior(input: InteriorInput): Promise<Uint8Array> 
   });
 
   return doc.save();
+}
+
+const STANDARD_FONTS = {
+  Helvetica: [StandardFonts.Helvetica, StandardFonts.HelveticaBold],
+  TimesRoman: [StandardFonts.TimesRoman, StandardFonts.TimesRomanBold],
+  Courier: [StandardFonts.Courier, StandardFonts.CourierBold],
+} as const;
+
+/** The chosen fonts, embedded once each (font files are subset to the letters used) */
+async function typographyLayout(doc: PDFDocument, input: InteriorInput) {
+  const { typography } = interiorSettingsSchema.parse(input.settings ?? {});
+  doc.registerFontkit(fontkit);
+  const embedded = new Map<string, Promise<PDFFont>>();
+  const embed = (key: string, load: () => Promise<PDFFont>) => {
+    if (!embedded.has(key)) embedded.set(key, load());
+    return embedded.get(key)!;
+  };
+  const font = (id: FontId, weight: 'regular' | 'bold') => {
+    const info = FONTS[id] as FontInfo;
+    if (info.standard) {
+      const name = STANDARD_FONTS[info.standard][weight === 'bold' ? 1 : 0];
+      return embed(name, () => doc.embedFont(name));
+    }
+    // Fonts without a bold use the regular
+    const file = (weight === 'bold' && info.bold) || info.regular!;
+    return embed(file, async () => doc.embedFont(await readFontFile(file), { subset: true }));
+  };
+  const color = (hex: string) => {
+    const n = parseInt(printColor(hex, input.paper === 'color').slice(1), 16);
+    return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+  };
+  return {
+    regular: await font(typography.bodyFont, 'regular'),
+    bold: await font(typography.bodyFont, 'bold'),
+    mono: await font(typography.puzzleFont, 'bold'),
+    heading: await font(typography.headingFont, 'bold'),
+    headingColor: color(typography.headingColor),
+    text: color(typography.textColor),
+  };
 }
 
 /** Decoration settings, with the image embedded once for every page */
@@ -285,19 +332,28 @@ function contentBox(layout: Layout, pageIndex: number) {
   };
 }
 
-function drawCentered(page: PDFPage, layout: Layout, text: string, y: number, font: PDFFont, maxSize: number, box: { x: number; width: number }) {
+function drawCentered(
+  page: PDFPage,
+  layout: Layout,
+  text: string,
+  y: number,
+  font: PDFFont,
+  maxSize: number,
+  box: { x: number; width: number },
+  color: RGB = layout.text
+) {
   const safe = safeText(font, text);
   const size = fitFontSize(font, safe, maxSize, box.width);
-  page.drawText(safe, { x: box.x + (box.width - font.widthOfTextAtSize(safe, size)) / 2, y, size, font, color: BLACK });
+  page.drawText(safe, { x: box.x + (box.width - font.widthOfTextAtSize(safe, size)) / 2, y, size, font, color });
 }
 
 function drawTitlePage(layout: Layout, input: InteriorInput) {
   const page = addPage(layout);
   const box = contentBox(layout, 0);
   const middle = layout.height * 0.6;
-  drawCentered(page, layout, input.title, middle, layout.bold, 28, box);
+  drawCentered(page, layout, input.title, middle, layout.heading, 28, box, layout.headingColor);
   if (input.subtitle) {
-    drawCentered(page, layout, input.subtitle, middle - 32, layout.regular, 14, box);
+    drawCentered(page, layout, input.subtitle, middle - 32, layout.regular, 14, box, layout.headingColor);
   }
 }
 
@@ -319,7 +375,7 @@ function puzzlePage(layout: Layout, heading: string) {
   const pageIndex = layout.doc.getPageCount();
   const page = addPage(layout);
   const box = contentBox(layout, pageIndex);
-  drawCentered(page, layout, heading, box.top - 18 * layout.scale, layout.bold, 18 * layout.scale, box);
+  drawCentered(page, layout, heading, box.top - 18 * layout.scale, layout.heading, 18 * layout.scale, box, layout.headingColor);
   return { page, box: { ...box, top: box.top - 40 * layout.scale } };
 }
 
@@ -351,7 +407,7 @@ function drawSudoku(layout: Layout, puzzle: SudokuContent, heading: string, show
         y: top - r * cell - cell / 2 - digitSize * 0.35,
         size: digitSize,
         font,
-        color: given ? BLACK : GREY,
+        color: given ? layout.text : GREY,
       });
     }
   }
@@ -400,13 +456,13 @@ function drawMaze(layout: Layout, maze: MazeContent, heading: string, showSoluti
   const labelSize = 9 * layout.scale;
   const startX = left + cell / 2;
   const endX = left + (maze.width - 0.5) * cell;
-  page.drawText('Start', { x: startX - layout.bold.widthOfTextAtSize('Start', labelSize) / 2, y: top + 4, size: labelSize, font: layout.bold, color: BLACK });
+  page.drawText('Start', { x: startX - layout.bold.widthOfTextAtSize('Start', labelSize) / 2, y: top + 4, size: labelSize, font: layout.bold, color: layout.text });
   page.drawText('Finish', {
     x: endX - layout.bold.widthOfTextAtSize('Finish', labelSize) / 2,
     y: top - maze.height * cell - labelSize - 4,
     size: labelSize,
     font: layout.bold,
-    color: BLACK,
+    color: layout.text,
   });
 }
 
@@ -452,7 +508,7 @@ function drawWordSearch(layout: Layout, puzzle: WordSearchContent, heading: stri
         y: y - letterSize * 0.35,
         size: letterSize,
         font: layout.mono,
-        color: BLACK,
+        color: layout.text,
       });
     })
   );
@@ -469,7 +525,7 @@ function drawWordSearch(layout: Layout, puzzle: WordSearchContent, heading: stri
       y: listTop - (i % perColumn) * lineHeight,
       size,
       font: layout.regular,
-      color: BLACK,
+      color: layout.text,
     });
   });
 }
@@ -481,7 +537,7 @@ function drawParagraphs(page: PDFPage, layout: Layout, paragraphs: string[], box
   let y = top;
   for (const paragraph of paragraphs) {
     for (const line of wrapText(layout.regular, safeText(layout.regular, paragraph), size, box.width)) {
-      page.drawText(line, { x: box.x, y, size, font: layout.regular, color: BLACK });
+      page.drawText(line, { x: box.x, y, size, font: layout.regular, color: layout.text });
       y -= lineHeight;
     }
     y -= lineHeight * 0.6;
@@ -498,7 +554,7 @@ function drawHowToPlay(layout: Layout, type: PuzzleContent['type']) {
 function drawSectionPage(layout: Layout, title: string) {
   const pageIndex = layout.doc.getPageCount();
   const page = addPage(layout);
-  drawCentered(page, layout, title, layout.height * 0.55, layout.bold, 24 * layout.scale, contentBox(layout, pageIndex));
+  drawCentered(page, layout, title, layout.height * 0.55, layout.heading, 24 * layout.scale, contentBox(layout, pageIndex), layout.headingColor);
 }
 
 const LIGHT = rgb(0.7, 0.7, 0.7);
@@ -513,7 +569,7 @@ function drawRules(page: PDFPage, box: Pick<Box, 'x' | 'width'>, from: number, t
 }
 
 function drawLabel(page: PDFPage, layout: Layout, text: string, x: number, y: number) {
-  page.drawText(text, { x, y, size: 11 * layout.scale, font: layout.bold, color: BLACK });
+  page.drawText(text, { x, y, size: 11 * layout.scale, font: layout.bold, color: layout.text });
 }
 
 /** "Date: ______" across the top; returns the y below it */
@@ -645,11 +701,11 @@ function drawClueColumns(page: PDFPage, layout: Layout, columns: ReturnType<type
     lines.forEach((line, i) => {
       const y = top - i * lineHeight;
       if (line.heading) {
-        page.drawText(line.text, { x, y, size: size * 1.1, font: layout.bold, color: BLACK });
+        page.drawText(line.text, { x, y, size: size * 1.1, font: layout.bold, color: layout.text });
         return;
       }
-      if (line.label) page.drawText(line.label, { x, y, size, font: layout.bold, color: BLACK });
-      page.drawText(line.text, { x: x + (line.indent ?? 0), y, size, font: layout.regular, color: BLACK });
+      if (line.label) page.drawText(line.label, { x, y, size, font: layout.bold, color: layout.text });
+      page.drawText(line.text, { x: x + (line.indent ?? 0), y, size, font: layout.regular, color: layout.text });
     });
   });
 }
@@ -674,9 +730,10 @@ function drawCrossword(layout: Layout, puzzle: CrosswordContent, heading: string
       // White squares, so a background pattern doesn't show through
       page.drawRectangle({ x, y, width: cell, height: cell, color: rgb(1, 1, 1), borderColor: BLACK, borderWidth: 0.75 * layout.scale });
       const number = numberAt.get(`${r},${c}`);
-      if (number) page.drawText(String(number), { x: x + 1.5, y: y + cell - numberSize - 1, size: numberSize, font: layout.regular, color: BLACK });
+      if (number) page.drawText(String(number), { x: x + 1.5, y: y + cell - numberSize - 1, size: numberSize, font: layout.regular, color: layout.text });
       if (showSolution) {
-        page.drawText(letter, { x: x + (cell - layout.bold.widthOfTextAtSize(letter, letterSize)) / 2, y: y + cell * 0.22, size: letterSize, font: layout.bold, color: BLACK });
+        const ch = safeText(layout.mono, letter);
+        page.drawText(ch, { x: x + (cell - layout.mono.widthOfTextAtSize(ch, letterSize)) / 2, y: y + cell * 0.22, size: letterSize, font: layout.mono, color: layout.text });
       }
     })
   );
