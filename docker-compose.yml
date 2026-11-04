@@ -51,7 +51,7 @@ services:
 
   # Runs once per deploy; the app starts only after it succeeds
   migrate:
-    build: { context: ., dockerfile: apps/worker/Dockerfile }
+    build: { context: ., dockerfile: Dockerfile }
     image: bookbot-worker
     working_dir: /app
     command: ['npm', 'run', 'db:migrate']
