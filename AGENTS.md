@@ -19,14 +19,14 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - **Database**: PostgreSQL with Drizzle ORM
 - **Cache/Queue**: Redis with BullMQ
 - **Auth**: NextAuth v4 with JWT strategy
-- **Storage**: R2/S3 (presigned URLs)
+- **Storage**: local disk in development, Vercel Blob (private) in production
 - **Editor**: Konva (react-konva)
 - **AI**: Placeholder wrapper for Anthropic/OpenAI
 - **Worker**: BullMQ + Redis (Dockerized)
 
 ### Environment Variables (.env.example)
 - DATABASE_URL, REDIS_URL
-- R2_* (account, keys, bucket)
+- BLOB_READ_WRITE_TOKEN (Vercel Blob; added by Vercel when a store is connected)
 - NEXTAUTH_SECRET, NEXTAUTH_URL
 - STRIPE_* (secret key, webhook, price IDs)
 - ANTHROPIC_API_KEY, OPENAI_API_KEY

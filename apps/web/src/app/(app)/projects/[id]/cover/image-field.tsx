@@ -16,18 +16,28 @@ export interface UploadedImage {
   url: string;
 }
 
+type UploadInstructions =
+  | { kind: 'put'; url: string; method: string; headers: Record<string, string> }
+  | { kind: 'vercel-blob'; pathname: string; handleUploadUrl: string };
+
 /**
- * Upload an image in three steps: reserve, upload (straight to the bucket
- * when the storage presigns), then have the server verify it
+ * Upload an image in three steps: reserve, send the file (straight to Vercel
+ * Blob in production, through our API locally), then have the server verify it
  */
 async function uploadImage(file: File): Promise<UploadedImage> {
-  const { asset, upload } = await apiFetch<{
-    asset: { id: string };
-    upload: { url: string; method: string; headers: Record<string, string> };
-  }>('/api/assets', { method: 'POST', body: { name: file.name, contentType: file.type, size: file.size } });
+  const { asset, upload } = await apiFetch<{ asset: { id: string }; upload: UploadInstructions }>('/api/assets', {
+    method: 'POST',
+    body: { name: file.name, contentType: file.type, size: file.size },
+  });
 
-  const put = await fetch(upload.url, { method: upload.method, headers: upload.headers, body: file });
-  if (!put.ok) throw new Error('Upload failed');
+  if (upload.kind === 'vercel-blob') {
+    // Loaded only when the app stores files in Vercel Blob
+    const { upload: blobUpload } = await import('@vercel/blob/client');
+    await blobUpload(upload.pathname, file, { access: 'private', handleUploadUrl: upload.handleUploadUrl, contentType: file.type });
+  } else {
+    const put = await fetch(upload.url, { method: upload.method, headers: upload.headers, body: file });
+    if (!put.ok) throw new Error('Upload failed');
+  }
 
   const { asset: ready } = await apiFetch<{ asset: UploadedImage }>(`/api/assets/${asset.id}/complete`, { method: 'POST' });
   return ready;

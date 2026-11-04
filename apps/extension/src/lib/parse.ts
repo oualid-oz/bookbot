@@ -57,9 +57,9 @@ export function parseBestSellersRank(text: string): { rank: number; category: st
 
   const match = text.match(/(?:#|Nr\.\s*|n\.\s*|nº\s*)?(\d[\d.,\s ]*)\s+(?:in|en|dans|-)\s+([^(\n#]+?)\s*(?:\(|\n|$|#)/i);
   if (!match) return null;
-  const rank = parseCount(match[1]);
+  const rank = parseCount(match[1] ?? '');
   if (!rank) return null;
-  const name = match[2].trim().replace(/[:.]$/, '');
+  const name = (match[2] ?? '').trim().replace(/[:.]$/, '');
   return { rank, category: CATEGORY_ALIASES[name.toLowerCase()] ?? name };
 }
 
@@ -67,7 +67,7 @@ export function parseBestSellersRank(text: string): { rank: number; category: st
 export function parsePrice(text: string): number | null {
   const match = text.replace(/ /g, ' ').match(/(\d[\d.,\s]*)/);
   if (!match) return null;
-  let number = match[1].replace(/\s/g, '');
+  let number = (match[1] ?? '').replace(/\s/g, '');
   // The last separator followed by exactly two digits is the decimal point
   const decimal = number.match(/[.,](\d{2})$/);
   number = decimal ? number.slice(0, -3).replace(/[.,]/g, '') + '.' + decimal[1] : number.replace(/[.,]/g, '');

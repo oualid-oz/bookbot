@@ -32,10 +32,10 @@ describe('checkEnv', () => {
   });
 
   it('checks the storage driver settings', () => {
-    expect(checkEnv('worker', { ...base, FILE_STORAGE: 'r2', R2_BUCKET_NAME: 'b' }).errors).toEqual([
-      'R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY are required for FILE_STORAGE=r2',
+    expect(checkEnv('worker', { ...base, FILE_STORAGE: 'vercel-blob' }).errors).toEqual([
+      'BLOB_READ_WRITE_TOKEN is required for FILE_STORAGE=vercel-blob (connect a Blob store to the Vercel project)',
     ]);
-    expect(checkEnv('worker', { ...base, FILE_STORAGE: 'ftp' }).errors).toEqual(['FILE_STORAGE must be local, r2, or s3 (got "ftp")']);
+    expect(checkEnv('worker', { ...base, FILE_STORAGE: 'r2' }).errors).toEqual(['FILE_STORAGE must be local or vercel-blob (got "r2")']);
   });
 
   it('treats billing as all or nothing', () => {
@@ -58,10 +58,8 @@ describe('checkEnv', () => {
 
 describe('storage detection', () => {
   const base = { DATABASE_URL: 'postgres://x/db', REDIS_URL: 'redis://x', NEXTAUTH_SECRET: 's'.repeat(40), NEXTAUTH_URL: 'https://x.dev' };
-  it('uses R2 when its settings are filled in, and refuses local storage on Vercel', () => {
-    expect(checkEnv('worker', { ...base, R2_ACCOUNT_ID: 'a', R2_BUCKET_NAME: 'b' }).errors).toEqual([
-      'R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY are required for FILE_STORAGE=r2',
-    ]);
-    expect(checkEnv('worker', { ...base, VERCEL: '1' }).errors).toContain('Vercel needs R2 or S3 storage: set the R2_* (or S3_*) variables');
+  it('uses Vercel Blob when its token is set, and refuses local storage on Vercel', () => {
+    expect(checkEnv('worker', { ...base, VERCEL: '1' }).errors).toContain('Vercel needs file storage: connect a Vercel Blob store to the project');
+    expect(checkEnv('worker', { ...base, VERCEL: '1', BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_x' }).errors).toEqual([]);
   });
 });

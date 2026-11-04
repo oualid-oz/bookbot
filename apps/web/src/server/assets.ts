@@ -2,7 +2,7 @@ import sharp, { type Metadata } from 'sharp';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, assets } from '@bookbot/db';
 import { MAX_IMAGE_BYTES } from '@bookbot/shared';
-import { getStorage } from '@bookbot/storage';
+import { getStorage, storageDriver } from '@bookbot/storage';
 import { errorResponse, isUuid, requireOrgAccess } from './org-access';
 
 type Asset = typeof assets.$inferSelect;
@@ -50,9 +50,18 @@ export async function createPendingAsset(orgId: string, input: { name: string; c
     .values({ id, orgId, r2Key: key, kind: 'image', status: 'pending', name: input.name, mimeType: input.contentType, size: input.size })
     .returning();
 
-  const uploadUrl =
-    (await getStorage().presignPut(key, input.contentType, input.size)) ?? `/api/assets/${id}/upload`;
-  return { asset, uploadUrl };
+  return { asset, upload: uploadInstructions(key, id, input.contentType) };
+}
+
+/**
+ * How the browser sends the file: with the Vercel Blob client (which asks
+ * /api/assets/blob-upload for a token), or a PUT through our API for local storage
+ */
+function uploadInstructions(key: string, id: string, contentType: string) {
+  if (storageDriver() === 'vercel-blob') {
+    return { kind: 'vercel-blob' as const, pathname: key, handleUploadUrl: '/api/assets/blob-upload' };
+  }
+  return { kind: 'put' as const, url: `/api/assets/${id}/upload`, method: 'PUT', headers: { 'Content-Type': contentType } };
 }
 
 /**

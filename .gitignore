@@ -39,7 +39,7 @@ next-env.d.ts
 apps/worker/dist
 
 # extension
-apps/extension/.wxt
+**/.wxt
 apps/extension/dist
 apps/extension/.output
 

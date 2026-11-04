@@ -4,7 +4,7 @@ import { readBodyWithLimit, requireAssetAccess } from '@/server/assets';
 import { errorResponse } from '@/server/org-access';
 
 /**
- * Upload target for storage drivers that can't presign (local disk).
+ * Upload target for local disk storage (Vercel Blob uploads go straight to Blob).
  * With R2/S3 the browser uploads straight to the bucket instead.
  */
 export async function PUT(req: NextRequest, ctx: RouteContext<'/api/assets/[id]/upload'>) {

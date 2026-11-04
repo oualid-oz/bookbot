@@ -57,7 +57,7 @@ describe('asset uploads', () => {
     const { res, data } = await start({ name: '../../My Cover!.png', contentType: 'image/png', size: png.length });
     expect(res.status).toBe(201);
     const id = data!.asset.id;
-    // Local storage can't presign, so the upload goes through our API
+    // With local storage the upload goes through our API
     expect(data!.upload.url).toBe(`/api/assets/${id}/upload`);
     const [row] = await db.select().from(assets).where(eq(assets.id, id));
     expect(row.r2Key).toBe(`assets/${alice.orgId}/${id}`);
