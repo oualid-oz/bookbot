@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { connection, NextResponse } from 'next/server';
 import { sql } from 'drizzle-orm';
 import { db } from '@bookbot/db';
 import { getReadyRedis } from '@/server/redis';
@@ -22,6 +22,8 @@ async function check(fn: () => Promise<unknown>): Promise<'ok' | 'error'> {
  * Liveness and dependency check for load balancers and Docker
  */
 export async function GET() {
+  // Only on real requests: never run (and never connect to Redis) during the build
+  await connection();
   const [database, redis] = await Promise.all([
     check(() => db.execute(sql`select 1`)),
     check(async () => (await getReadyRedis(TIMEOUT_MS)).ping()),

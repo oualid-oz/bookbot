@@ -6,7 +6,8 @@
       "framework": "nextjs"
     },
     "worker": {
-      "root": "apps/worker",
+      "root": ".",
+      "entrypoint": "apps/worker/Dockerfile",
       "runtime": "container"
     }
   },
