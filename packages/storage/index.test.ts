@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { createLocalStorage } from './index';
+import { createLocalStorage, storageDriver } from './index';
 
 describe('createLocalStorage', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'bookbot-storage-'));
@@ -33,5 +33,15 @@ describe('createLocalStorage', async () => {
 
   it('should not presign uploads (they go through the API)', async () => {
     expect(await storage.presignPut('assets/a.png', 'image/png', 10)).toBeNull();
+  });
+});
+
+describe('storageDriver', () => {
+  it('uses STORAGE_DRIVER when set, else the settings that are filled in', () => {
+    expect(storageDriver({ STORAGE_DRIVER: 's3', R2_ACCOUNT_ID: 'acc' })).toBe('s3');
+    expect(storageDriver({ R2_ACCOUNT_ID: 'acc', R2_BUCKET_NAME: 'books' })).toBe('r2');
+    expect(storageDriver({ S3_BUCKET: 'books' })).toBe('s3');
+    // Empty values from a copied .env don't count
+    expect(storageDriver({ STORAGE_DRIVER: '', R2_ACCOUNT_ID: '', S3_BUCKET: '' })).toBe('local');
   });
 });
