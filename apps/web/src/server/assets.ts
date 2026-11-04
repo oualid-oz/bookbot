@@ -50,20 +50,18 @@ export async function createPendingAsset(orgId: string, input: { name: string; c
     .values({ id, orgId, r2Key: key, kind: 'image', status: 'pending', name: input.name, mimeType: input.contentType, size: input.size })
     .returning();
 
-  return { asset, upload: await uploadInstructions(key, id, input.contentType, input.size) };
+  return { asset, upload: uploadInstructions(key, id, input.contentType) };
 }
 
 /**
  * How the browser sends the file: with the Vercel Blob client (which asks
- * /api/assets/blob-upload for a token), or a PUT to a presigned URL, or a PUT
- * through our API when the storage can't presign.
+ * /api/assets/blob-upload for a token), or a PUT through our API for local storage
  */
-async function uploadInstructions(key: string, id: string, contentType: string, size: number) {
+function uploadInstructions(key: string, id: string, contentType: string) {
   if (storageDriver() === 'vercel-blob') {
     return { kind: 'vercel-blob' as const, pathname: key, handleUploadUrl: '/api/assets/blob-upload' };
   }
-  const url = (await getStorage().presignPut(key, contentType, size)) ?? `/api/assets/${id}/upload`;
-  return { kind: 'put' as const, url, method: 'PUT', headers: { 'Content-Type': contentType } };
+  return { kind: 'put' as const, url: `/api/assets/${id}/upload`, method: 'PUT', headers: { 'Content-Type': contentType } };
 }
 
 /**

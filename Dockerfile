@@ -24,7 +24,7 @@ COPY packages/storage packages/storage
 COPY apps/worker apps/worker
 
 # Local storage driver writes here; mount a volume shared with the web app.
-# Use FILE_STORAGE=r2 (or s3) in production instead.
+# On Vercel, files go to Vercel Blob instead (BLOB_READ_WRITE_TOKEN).
 ENV NODE_ENV=production STORAGE_LOCAL_DIR=/data/storage WORKER_HEALTH_PORT=3001
 RUN mkdir -p /data/storage && chown -R node:node /data
 USER node

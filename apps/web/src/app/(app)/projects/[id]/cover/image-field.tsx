@@ -21,9 +21,8 @@ type UploadInstructions =
   | { kind: 'vercel-blob'; pathname: string; handleUploadUrl: string };
 
 /**
- * Upload an image in three steps: reserve, send the file (straight to the
- * bucket or Vercel Blob when possible, else through our API), then have the
- * server verify it
+ * Upload an image in three steps: reserve, send the file (straight to Vercel
+ * Blob in production, through our API locally), then have the server verify it
  */
 async function uploadImage(file: File): Promise<UploadedImage> {
   const { asset, upload } = await apiFetch<{ asset: { id: string }; upload: UploadInstructions }>('/api/assets', {

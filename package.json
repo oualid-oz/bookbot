@@ -17,14 +17,14 @@
   },
   "devDependencies": {
     "eslint": "^9",
-    "eslint-config-next": "^15.5.29",
+    "eslint-config-next": "16.4.2",
     "turbo": "^2.11.10"
   },
   "dependencies": {
-    "@vercel/blob": "^2.4.0",
+    "@vercel/blob": "^2.8.2",
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "0.45.4",
-    "shadcn": "^1.0.0",
+    "shadcn": "^4.23.0",
     "types": "^0.1.1",
     "vitest": "5.1.0",
     "wxt": "0.21.5",
