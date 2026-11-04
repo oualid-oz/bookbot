@@ -37,11 +37,11 @@ describe('createLocalStorage', async () => {
 });
 
 describe('storageDriver', () => {
-  it('uses STORAGE_DRIVER when set, else the settings that are filled in', () => {
-    expect(storageDriver({ STORAGE_DRIVER: 's3', R2_ACCOUNT_ID: 'acc' })).toBe('s3');
+  it('uses FILE_STORAGE when set, else the settings that are filled in', () => {
+    expect(storageDriver({ FILE_STORAGE: 's3', R2_ACCOUNT_ID: 'acc' })).toBe('s3');
     expect(storageDriver({ R2_ACCOUNT_ID: 'acc', R2_BUCKET_NAME: 'books' })).toBe('r2');
     expect(storageDriver({ S3_BUCKET: 'books' })).toBe('s3');
     // Empty values from a copied .env don't count
-    expect(storageDriver({ STORAGE_DRIVER: '', R2_ACCOUNT_ID: '', S3_BUCKET: '' })).toBe('local');
+    expect(storageDriver({ FILE_STORAGE: '', R2_ACCOUNT_ID: '', S3_BUCKET: '' })).toBe('local');
   });
 });

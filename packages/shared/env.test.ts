@@ -24,7 +24,7 @@ describe('checkEnv', () => {
     const { errors, warnings } = checkEnv('web', { ...prod, NEXTAUTH_URL: 'http://app.example.com', NEXTAUTH_SECRET: 'short' });
     expect(errors).toEqual([]);
     expect(warnings).toEqual([
-      'STORAGE_DRIVER=local: the web app and worker must share the storage directory',
+      'FILE_STORAGE=local: the web app and worker must share the storage directory',
       'NEXTAUTH_URL should use https in production',
       'NEXTAUTH_SECRET should be at least 32 characters',
       'EMAIL_TRANSPORT=console: emails are not delivered to users',
@@ -32,10 +32,10 @@ describe('checkEnv', () => {
   });
 
   it('checks the storage driver settings', () => {
-    expect(checkEnv('worker', { ...base, STORAGE_DRIVER: 'r2', R2_BUCKET_NAME: 'b' }).errors).toEqual([
-      'R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY are required for STORAGE_DRIVER=r2',
+    expect(checkEnv('worker', { ...base, FILE_STORAGE: 'r2', R2_BUCKET_NAME: 'b' }).errors).toEqual([
+      'R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY are required for FILE_STORAGE=r2',
     ]);
-    expect(checkEnv('worker', { ...base, STORAGE_DRIVER: 'ftp' }).errors).toEqual(['STORAGE_DRIVER must be local, r2, or s3 (got "ftp")']);
+    expect(checkEnv('worker', { ...base, FILE_STORAGE: 'ftp' }).errors).toEqual(['FILE_STORAGE must be local, r2, or s3 (got "ftp")']);
   });
 
   it('treats billing as all or nothing', () => {
@@ -53,5 +53,15 @@ describe('checkEnv', () => {
     const secret = 'sk_live_supersecretvalue';
     const report = checkEnv('web', { ...base, STRIPE_SECRET_KEY: secret, GOOGLE_CLIENT_ID: 'x', DATABASE_URL: 'mysql://user:pw@h/db' });
     expect(JSON.stringify(report)).not.toMatch(/supersecret|pw@/);
+  });
+});
+
+describe('storage detection', () => {
+  const base = { DATABASE_URL: 'postgres://x/db', REDIS_URL: 'redis://x', NEXTAUTH_SECRET: 's'.repeat(40), NEXTAUTH_URL: 'https://x.dev' };
+  it('uses R2 when its settings are filled in, and refuses local storage on Vercel', () => {
+    expect(checkEnv('worker', { ...base, R2_ACCOUNT_ID: 'a', R2_BUCKET_NAME: 'b' }).errors).toEqual([
+      'R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY are required for FILE_STORAGE=r2',
+    ]);
+    expect(checkEnv('worker', { ...base, VERCEL: '1' }).errors).toContain('Vercel needs R2 or S3 storage: set the R2_* (or S3_*) variables');
   });
 });

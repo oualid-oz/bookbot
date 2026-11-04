@@ -29,15 +29,17 @@ export function checkEnv(app: 'web' | 'worker', env: Env = process.env): EnvRepo
   if (!isUrl(env.DATABASE_URL, ['postgres:', 'postgresql:'])) errors.push('DATABASE_URL must be a postgres:// URL');
   if (!isUrl(env.REDIS_URL, ['redis:', 'rediss:'])) errors.push('REDIS_URL must be a redis:// URL');
 
-  const storage = env.STORAGE_DRIVER || 'local';
+  // Same choice as @bookbot/storage: the setting, else whichever credentials are filled in
+  const storage = env.FILE_STORAGE || (env.R2_ACCOUNT_ID ? 'r2' : env.S3_BUCKET ? 's3' : 'local');
   if (storage === 'r2') {
-    missing(['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET_NAME'], 'for STORAGE_DRIVER=r2');
+    missing(['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET_NAME'], 'for FILE_STORAGE=r2');
   } else if (storage === 's3') {
-    missing(['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'], 'for STORAGE_DRIVER=s3');
+    missing(['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'], 'for FILE_STORAGE=s3');
   } else if (storage === 'local') {
-    if (production) warnings.push('STORAGE_DRIVER=local: the web app and worker must share the storage directory');
+    if (env.VERCEL) errors.push('Vercel needs R2 or S3 storage: set the R2_* (or S3_*) variables');
+    else if (production) warnings.push('FILE_STORAGE=local: the web app and worker must share the storage directory');
   } else {
-    errors.push(`STORAGE_DRIVER must be local, r2, or s3 (got "${storage}")`);
+    errors.push(`FILE_STORAGE must be local, r2, or s3 (got "${storage}")`);
   }
 
   if (app === 'web') {

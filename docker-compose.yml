@@ -10,7 +10,7 @@ x-app-env: &app-env
   REDIS_URL: redis://redis:6379/0
   NEXTAUTH_URL: ${NEXTAUTH_URL:?Set NEXTAUTH_URL to the app's public URL}
   NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET (openssl rand -base64 32)}
-  STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+  FILE_STORAGE: ${FILE_STORAGE:-local}
   STORAGE_LOCAL_DIR: /data/storage
   R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
   R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
