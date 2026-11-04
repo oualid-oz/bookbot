@@ -30,7 +30,7 @@ See `.env.example` for every setting. For production:
 | `DATABASE_URL`, `REDIS_URL` | Yes | Set by Compose when using its Postgres and Redis |
 | `NEXTAUTH_SECRET` | Yes | At least 32 random characters |
 | `NEXTAUTH_URL` | Yes | Public HTTPS URL; used in emails and Stripe redirects |
-| `STORAGE_DRIVER` | Recommended: `r2` | `local` needs one volume shared by web and worker (Compose does this) |
+| `FILE_STORAGE` | Recommended: `r2` | `local` needs one volume shared by web and worker (Compose does this) |
 | `R2_*` | With `r2` | Account ID, access key, secret, bucket |
 | `STRIPE_*` | For billing | All four, or none. See [Billing](#billing) |
 | `GOOGLE_CLIENT_ID/SECRET` | Optional | Both or neither. Redirect URI: `<NEXTAUTH_URL>/api/auth/callback/google` |
@@ -62,7 +62,7 @@ Both Docker images define a `HEALTHCHECK` that uses these endpoints.
 
 ## File storage (Cloudflare R2)
 
-Set `STORAGE_DRIVER=r2` and the `R2_*` settings. Browsers upload cover images straight to the bucket using presigned URLs, so the bucket needs a CORS rule that allows `PUT` from your app. In the Cloudflare dashboard, open **R2 → your bucket → Settings → CORS policy**:
+Set `FILE_STORAGE=r2` and the `R2_*` settings. Browsers upload cover images straight to the bucket using presigned URLs, so the bucket needs a CORS rule that allows `PUT` from your app. In the Cloudflare dashboard, open **R2 → your bucket → Settings → CORS policy**:
 
 ```json
 [
