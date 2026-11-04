@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { assets, db, projects, puzzleSets, savedNiches } from '@bookbot/db';
+import { assets, db, exports, projects, puzzleSets, savedNiches } from '@bookbot/db';
 import { GET as listProjects, POST as createProject } from '@/app/api/projects/route';
 import { DELETE as deleteProject, GET as getProject, PATCH as updateProject } from '@/app/api/projects/[id]/route';
 import { GET as getCover, PUT as saveCover } from '@/app/api/projects/[id]/cover/route';
@@ -8,6 +8,7 @@ import { GET as listPuzzles, POST as addPuzzle } from '@/app/api/projects/[id]/p
 import { DELETE as deletePuzzle } from '@/app/api/projects/[id]/puzzles/[puzzleId]/route';
 import { GET as getInterior, PUT as saveInterior } from '@/app/api/projects/[id]/interior/route';
 import { GET as getListing, PUT as saveListing } from '@/app/api/projects/[id]/listing/route';
+import { GET as getProgress } from '@/app/api/projects/[id]/progress/route';
 import { createUser, json, params, request, resetDatabase, signInAs, type TestUser } from './helpers';
 
 let alice: TestUser;
@@ -233,6 +234,7 @@ describe('interior settings', () => {
       version: 1,
       solutions: 'back',
       howToPlay: true,
+      titlePage: true,
       largePrint: false,
       lineSpacing: 'wide',
       typography: { headingFont: 'helvetica', bodyFont: 'helvetica', puzzleFont: 'courier', headingColor: '#000000', textColor: '#000000' },
@@ -245,6 +247,7 @@ describe('interior settings', () => {
         imageId: null,
         imageMode: 'frame',
         imageOpacity: 0.2,
+        framePadding: 'small',
       },
     });
 
@@ -345,5 +348,41 @@ describe('listing', () => {
     expect((await saveListing(request('/x', { method: 'PUT', body: { title: 'x', keywords: Array(8).fill('k') } }), ctx)).status).toBe(400);
     signInAs(bob);
     expect((await getListing(request('/x'), ctx)).status).toBe(404);
+  });
+});
+
+describe('progress', () => {
+  type Progress = Record<string, number | boolean>;
+  const progressOf = async (id: string) => json<Progress>(await getProgress(request('/x'), params({ id })));
+
+  it('reports what is done in each step', async () => {
+    signInAs(alice);
+    const [project] = await db
+      .insert(projects)
+      .values({ orgId: alice.orgId, title: 'Fresh', type: 'puzzle_book', trimSize: '6x9', pageCount: 24 })
+      .returning();
+    const ctx = params({ id: project.id });
+
+    expect(await progressOf(project.id)).toEqual({
+      puzzles: 0,
+      interiorSaved: false,
+      coverSaved: false,
+      listingErrors: expect.any(Number),
+      listingWarnings: expect.any(Number),
+      interiorExported: false,
+      coverExported: false,
+    });
+
+    await addPuzzle(request('/x', { method: 'POST', body: { type: 'sudoku', count: 2 } }), ctx);
+    await saveInterior(request('/x', { method: 'PUT', body: {} }), ctx);
+    await db.insert(exports).values({ projectId: project.id, status: 'completed', r2Key: 'x.pdf', spec: { kind: 'cover' } });
+    await db.insert(exports).values({ projectId: project.id, status: 'failed', spec: { kind: 'interior' } });
+
+    expect(await progressOf(project.id)).toMatchObject({ puzzles: 2, interiorSaved: true, coverSaved: false, coverExported: true, interiorExported: false });
+  });
+
+  it("hides other organizations' projects", async () => {
+    signInAs(bob);
+    expect((await getProgress(request('/x'), params({ id: projectId }))).status).toBe(404);
   });
 });

@@ -106,6 +106,8 @@ export const interiorSettingsSchema = z.object({
   solutions: z.enum(['back', 'none']).default('back'),
   /** A rules page before the first puzzle of each type */
   howToPlay: z.boolean().default(true),
+  /** Open with a page showing the title and subtitle (and a blank page behind it) */
+  titlePage: z.boolean().default(true),
   /** Bigger text and bolder lines, for readers with low vision */
   largePrint: z.boolean().default(false),
   /** Unset: lined for journals, blank otherwise */
@@ -135,6 +137,8 @@ export const interiorSettingsSchema = z.object({
       imageId: z.string().uuid().nullable().default(null),
       imageMode: z.enum(['frame', 'watermark']).default('frame'),
       imageOpacity: z.number().min(0.05).max(1).default(0.2),
+      /** Room between a border or frame image and the page content */
+      framePadding: z.enum(['small', 'medium', 'large']).default('small'),
     })
     .default({}),
 });

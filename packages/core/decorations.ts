@@ -21,8 +21,8 @@ const PT = 72;
  */
 export const FRAME_EDGE_INCHES = 0.3;
 
-/** Space between the frame and the page content */
-export const FRAME_PADDING = 18;
+/** Space between the frame and the page content, in points */
+export const FRAME_PADDING = { small: 18, medium: 36, large: 54 } as const;
 
 export interface Rect {
   x: number;

@@ -18,13 +18,13 @@ const STANDARD_CSS: Record<NonNullable<FontInfo['standard']>, string> = {
 };
 
 /** CSS font-family for a font: the same TTF the PDF embeds, loaded from /fonts */
-function cssFamily(id: FontId) {
+export function cssFamily(id: FontId) {
   const info = FONTS[id] as FontInfo;
   return info.standard ? STANDARD_CSS[info.standard] : `"bookbot-${id}", sans-serif`;
 }
 
 /** @font-face rules for every font with a file */
-function FontFaces() {
+export function FontFaces() {
   const rules = (Object.entries(FONTS) as [FontId, FontInfo][])
     .filter(([, info]) => info.regular)
     .flatMap(([id, info]) => [
@@ -58,7 +58,7 @@ function FontSelect({ id, label, value, options, onChange }: {
 
 function ColorField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (color: string) => void }) {
   return (
-    <Field className="w-24">
+    <Field className="w-16">
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Input id={id} type="color" className="h-9 p-1" value={value} onChange={(e) => onChange(e.target.value)} />
     </Field>
@@ -70,50 +70,50 @@ export function TypographyFields({ project, typography, onChange }: {
   typography: Typography;
   onChange: (changes: Partial<Typography>) => void;
 }) {
-  const colorPaper = project.paper === 'color';
-  const headingColor = printColor(typography.headingColor, colorPaper);
-  const textColor = printColor(typography.textColor, colorPaper);
-
   return (
     <div className="flex flex-col gap-4">
-      <FontFaces />
-      <div className="flex items-end gap-2">
-        <div className="flex-1">
-          <FontSelect id="heading-font" label="Title font" value={typography.headingFont} options={FONT_IDS}
-            onChange={(headingFont) => onChange({ headingFont })} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <FontSelect id="heading-font" label="Title font" value={typography.headingFont} options={FONT_IDS}
+              onChange={(headingFont) => onChange({ headingFont })} />
+          </div>
+          <ColorField id="heading-color" label="Color" value={typography.headingColor} onChange={(headingColor) => onChange({ headingColor })} />
         </div>
-        <ColorField id="heading-color" label="Title color" value={typography.headingColor} onChange={(headingColor) => onChange({ headingColor })} />
-      </div>
-      <div className="flex items-end gap-2">
-        <div className="flex-1">
-          <FontSelect id="body-font" label="Text font" value={typography.bodyFont} options={BODY_FONT_IDS}
-            onChange={(bodyFont) => onChange({ bodyFont })} />
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <FontSelect id="body-font" label="Text font" value={typography.bodyFont} options={BODY_FONT_IDS}
+              onChange={(bodyFont) => onChange({ bodyFont })} />
+          </div>
+          <ColorField id="text-color" label="Color" value={typography.textColor} onChange={(textColor) => onChange({ textColor })} />
         </div>
-        <ColorField id="text-color" label="Text color" value={typography.textColor} onChange={(textColor) => onChange({ textColor })} />
-      </div>
-      {project.type !== 'journal' && (
-        <FontSelect id="puzzle-font" label="Puzzle letters" value={typography.puzzleFont} options={BODY_FONT_IDS}
-          onChange={(puzzleFont) => onChange({ puzzleFont })} />
-      )}
-
-      {/* Sample in the chosen fonts and print colors */}
-      <div className="flex flex-col gap-2 rounded-md border bg-white p-4 text-black" aria-label="Text preview">
-        <p className="text-center text-xl font-bold" style={{ fontFamily: cssFamily(typography.headingFont), color: headingColor }}>
-          Puzzle 1 · Ocean Life
-        </p>
         {project.type !== 'journal' && (
-          <p className="text-center text-lg font-bold tracking-[0.4em]" style={{ fontFamily: cssFamily(typography.puzzleFont), color: textColor }}>
-            WHALESQRCORAL
-          </p>
+          <FontSelect id="puzzle-font" label="Puzzle letters" value={typography.puzzleFont} options={BODY_FONT_IDS}
+            onChange={(puzzleFont) => onChange({ puzzleFont })} />
         )}
-        <p className="text-sm" style={{ fontFamily: cssFamily(typography.bodyFont), color: textColor }}>
-          Find every word from the list hidden in the grid. Words run across, down or diagonally.
-        </p>
       </div>
-      <FieldDescription>
-        Grid lines stay black so puzzles print crisply.
-        {!colorPaper && ' Your interior is black and white, so colors print in grey (shown above).'}
-      </FieldDescription>
+      <FieldDescription>Grid lines stay black so puzzles print crisply.</FieldDescription>
+    </div>
+  );
+}
+
+/** The chosen fonts and print colors on sample text */
+export function TypographySample({ project, typography }: { project: ProjectSummary; typography: Typography }) {
+  const colorPaper = project.paper === 'color';
+  const textColor = printColor(typography.textColor, colorPaper);
+  return (
+    <div className="flex flex-col gap-2 rounded-md border bg-white p-4 text-black" aria-label="Text preview">
+      <p className="text-center text-lg font-bold" style={{ fontFamily: cssFamily(typography.headingFont), color: printColor(typography.headingColor, colorPaper) }}>
+        Puzzle 1 · Ocean Life
+      </p>
+      {project.type !== 'journal' && (
+        <p className="text-center font-bold tracking-[0.3em]" style={{ fontFamily: cssFamily(typography.puzzleFont), color: textColor }}>
+          WHALESQRCORAL
+        </p>
+      )}
+      <p className="text-sm" style={{ fontFamily: cssFamily(typography.bodyFont), color: textColor }}>
+        Find every word from the list hidden in the grid. Words run across, down or diagonally.
+      </p>
     </div>
   );
 }

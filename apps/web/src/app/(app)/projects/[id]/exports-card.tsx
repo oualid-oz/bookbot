@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { DownloadIcon, EyeIcon, FileTextIcon, ImageIcon, Loader2Icon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -26,7 +26,8 @@ const STATUS_VARIANT = {
   failed: 'destructive',
 } as const;
 
-export function ExportsCard({ projectId }: { projectId: string }) {
+/** `onChange` runs when exports finish rendering */
+export function ExportsCard({ projectId, onChange }: { projectId: string; onChange?: () => void }) {
   const [rows, setRows] = useState<ExportRow[]>([]);
   const [starting, setStarting] = useState<string | null>(null);
   const [preview, setPreview] = useState<ExportRow | null>(null);
@@ -50,6 +51,12 @@ export function ExportsCard({ projectId }: { projectId: string }) {
     const timer = setInterval(load, 2000);
     return () => clearInterval(timer);
   }, [active, load]);
+
+  const wasActive = useRef(false);
+  useEffect(() => {
+    if (wasActive.current && !active) onChange?.();
+    wasActive.current = active;
+  }, [active, onChange]);
 
   const startExport = async (kind: 'interior' | 'cover') => {
     setStarting(kind);
