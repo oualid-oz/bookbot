@@ -10,7 +10,8 @@
     "push": "tsx ../../node_modules/drizzle-kit/bin.cjs push",
     "studio": "tsx ../../node_modules/drizzle-kit/bin.cjs studio",
     "lint": "eslint",
-    "migrate:deploy": "tsx migrate.ts"
+    "migrate:deploy": "tsx migrate.ts",
+    "migrate:vercel": "tsx vercel-migrate.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.33.0",
