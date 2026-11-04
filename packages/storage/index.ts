@@ -6,7 +6,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 /**
  * Object storage used by the web app and the worker.
  *
- * STORAGE_DRIVER selects the backend:
+ * STORAGE_DRIVER selects the backend. Unset, it's r2 when R2_ACCOUNT_ID is
+ * set, s3 when S3_BUCKET is set, and local otherwise:
  * - local (default): files on disk under STORAGE_LOCAL_DIR, which defaults to
  *   <repo>/.data/storage when run from apps/web or apps/worker. Both apps must
  *   see the same directory.
@@ -113,9 +114,21 @@ function requireEnv(name: string): string {
 
 let storage: Storage | undefined;
 
+/** The configured driver, from STORAGE_DRIVER or else from which settings are filled in */
+export function storageDriver(env: Record<string, string | undefined> = process.env): string {
+  if (env.STORAGE_DRIVER) return env.STORAGE_DRIVER;
+  if (env.R2_ACCOUNT_ID) return 'r2';
+  if (env.S3_BUCKET) return 's3';
+  return 'local';
+}
+
 export function getStorage(): Storage {
   if (!storage) {
-    const driver = process.env.STORAGE_DRIVER || 'local';
+    const driver = storageDriver();
+    // Vercel has no disk shared between the web app and the worker, and it isn't kept
+    if (driver === 'local' && process.env.VERCEL) {
+      throw new Error('Local file storage does not work on Vercel: set the R2_* (or S3_*) variables and STORAGE_DRIVER=r2 (or s3)');
+    }
     if (driver === 'local') {
       storage = createLocalStorage(
         process.env.STORAGE_LOCAL_DIR || path.resolve(process.cwd(), '../../.data/storage')
@@ -140,6 +153,8 @@ export function getStorage(): Storage {
     } else {
       throw new Error(`Unsupported STORAGE_DRIVER "${driver}"`);
     }
+    // One line in the logs (Vercel, Docker) showing where files go
+    console.log(`Storage: ${driver}${driver === 'local' ? '' : ` (bucket ${process.env.R2_BUCKET_NAME || process.env.S3_BUCKET})`}`);
   }
   return storage;
 }
