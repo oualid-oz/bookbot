@@ -30,7 +30,7 @@ See `.env.example` for every setting. For production:
 | `DATABASE_URL`, `REDIS_URL` | Yes | Set by Compose when using its Postgres and Redis |
 | `NEXTAUTH_SECRET` | Yes | At least 32 random characters |
 | `NEXTAUTH_URL` | Yes | Public HTTPS URL; used in emails and Stripe redirects |
-| `FILE_STORAGE` | Recommended: `r2` | `local` needs one volume shared by web and worker (Compose does this) |
+| `FILE_STORAGE` | Usually unset | Picked automatically: `vercel-blob` when `BLOB_READ_WRITE_TOKEN` is set, else `r2`/`s3` from their settings, else `local` (needs one volume shared by web and worker; Compose does this) |
 | `R2_*` | With `r2` | Account ID, access key, secret, bucket |
 | `STRIPE_*` | For billing | All four, or none. See [Billing](#billing) |
 | `GOOGLE_CLIENT_ID/SECRET` | Optional | Both or neither. Redirect URI: `<NEXTAUTH_URL>/api/auth/callback/google` |
@@ -59,6 +59,12 @@ Run them before starting a new version. Compose does this automatically. They ar
 | worker | `GET :3001/health` (set `WORKER_HEALTH_PORT`) | Queue worker running, Postgres and Redis respond |
 
 Both Docker images define a `HEALTHCHECK` that uses these endpoints.
+
+## File storage on Vercel (Vercel Blob)
+
+In the Vercel dashboard, open **Storage → Create → Blob** and connect the store to the project. Vercel then adds `BLOB_READ_WRITE_TOKEN` to the project's environment variables, and Bookbot uses Blob automatically; nothing else to set. Files are stored **private**: exports and images are only served through Bookbot's API to signed-in users. Browsers upload images straight to Blob (with a short-lived token from `/api/assets/blob-upload`), so uploads aren't limited by Vercel's 4.5 MB request size.
+
+Don't set a variable named `STORAGE_DRIVER` on Vercel: the container build tool reads it and the worker build fails.
 
 ## File storage (Cloudflare R2)
 

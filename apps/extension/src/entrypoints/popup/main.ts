@@ -16,7 +16,7 @@ async function testConnection() {
   else showStatus(response.error, 'error');
 }
 
-browser.storage.local.get('apiToken').then(({ apiToken }) => {
+browser.storage.local.get<{ apiToken?: string }>('apiToken').then(({ apiToken }) => {
   if (apiToken) {
     tokenInput.value = apiToken;
     testConnection();

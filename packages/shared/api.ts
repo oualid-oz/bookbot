@@ -47,7 +47,8 @@ export type ExportSpec = z.infer<typeof exportSpecSchema>;
 export const exportRequestSchema = z.object({
   projectId: z.string().uuid(),
   orgId: orgIdSchema,
-  spec: exportSpecSchema.default({}),
+  // prefault: zod 4 fills each field's own default from {}
+  spec: exportSpecSchema.prefault({}),
 });
 
 /** Image types pdf-lib can embed in exports */
@@ -57,7 +58,7 @@ export const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 export const assetUploadSchema = z.object({
   orgId: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(255),
-  contentType: z.enum(IMAGE_TYPES, { errorMap: () => ({ message: 'Use a PNG or JPEG image' }) }),
+  contentType: z.enum(IMAGE_TYPES, { error: 'Use a PNG or JPEG image' }),
   size: z.number().int().positive().max(MAX_IMAGE_BYTES, 'Images can be at most 25 MB'),
 });
 

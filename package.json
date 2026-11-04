@@ -16,11 +16,19 @@
     "db:migrate": "npm run migrate:deploy -w @bookbot/db"
   },
   "devDependencies": {
+    "eslint": "^9",
+    "eslint-config-next": "^15.5.29",
     "turbo": "^2.11.10"
   },
   "dependencies": {
+    "@vercel/blob": "^2.4.0",
+    "drizzle-kit": "^0.31.11",
+    "drizzle-orm": "0.45.4",
+    "shadcn": "^1.0.0",
     "types": "^0.1.1",
-    "zod": "^3.23.0"
+    "vitest": "5.1.0",
+    "wxt": "0.21.5",
+    "zod": "^4.6.7"
   },
   "packageManager": "npm@10.0.0"
 }

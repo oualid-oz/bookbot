@@ -40,6 +40,8 @@ describe('storageDriver', () => {
   it('uses FILE_STORAGE when set, else the settings that are filled in', () => {
     expect(storageDriver({ FILE_STORAGE: 's3', R2_ACCOUNT_ID: 'acc' })).toBe('s3');
     expect(storageDriver({ R2_ACCOUNT_ID: 'acc', R2_BUCKET_NAME: 'books' })).toBe('r2');
+    // Vercel adds BLOB_READ_WRITE_TOKEN when a Blob store is connected; it wins over leftover R2 settings
+    expect(storageDriver({ BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_x', R2_ACCOUNT_ID: 'acc' })).toBe('vercel-blob');
     expect(storageDriver({ S3_BUCKET: 'books' })).toBe('s3');
     // Empty values from a copied .env don't count
     expect(storageDriver({ FILE_STORAGE: '', R2_ACCOUNT_ID: '', S3_BUCKET: '' })).toBe('local');

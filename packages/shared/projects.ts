@@ -124,7 +124,7 @@ export const interiorSettingsSchema = z.object({
       headingColor: hexColor.default('#000000'),
       textColor: hexColor.default('#000000'),
     })
-    .default({}),
+    .prefault({}),
   /** Border, background pattern and image on every page with content */
   decor: z
     .object({
@@ -140,7 +140,7 @@ export const interiorSettingsSchema = z.object({
       /** Room between a border or frame image and the page content */
       framePadding: z.enum(['small', 'medium', 'large']).default('small'),
     })
-    .default({}),
+    .prefault({}),
 });
 
 export type InteriorSettings = z.infer<typeof interiorSettingsSchema>;

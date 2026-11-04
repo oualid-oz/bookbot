@@ -30,16 +30,19 @@ export function checkEnv(app: 'web' | 'worker', env: Env = process.env): EnvRepo
   if (!isUrl(env.REDIS_URL, ['redis:', 'rediss:'])) errors.push('REDIS_URL must be a redis:// URL');
 
   // Same choice as @bookbot/storage: the setting, else whichever credentials are filled in
-  const storage = env.FILE_STORAGE || (env.R2_ACCOUNT_ID ? 'r2' : env.S3_BUCKET ? 's3' : 'local');
-  if (storage === 'r2') {
+  const storage =
+    env.FILE_STORAGE || (env.BLOB_READ_WRITE_TOKEN ? 'vercel-blob' : env.R2_ACCOUNT_ID ? 'r2' : env.S3_BUCKET ? 's3' : 'local');
+  if (storage === 'vercel-blob') {
+    missing(['BLOB_READ_WRITE_TOKEN'], 'for FILE_STORAGE=vercel-blob (connect a Blob store to the Vercel project)');
+  } else if (storage === 'r2') {
     missing(['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET_NAME'], 'for FILE_STORAGE=r2');
   } else if (storage === 's3') {
     missing(['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'], 'for FILE_STORAGE=s3');
   } else if (storage === 'local') {
-    if (env.VERCEL) errors.push('Vercel needs R2 or S3 storage: set the R2_* (or S3_*) variables');
+    if (env.VERCEL) errors.push('Vercel needs file storage: connect a Vercel Blob store to the project');
     else if (production) warnings.push('FILE_STORAGE=local: the web app and worker must share the storage directory');
   } else {
-    errors.push(`FILE_STORAGE must be local, r2, or s3 (got "${storage}")`);
+    errors.push(`FILE_STORAGE must be local, vercel-blob, r2, or s3 (got "${storage}")`);
   }
 
   if (app === 'web') {

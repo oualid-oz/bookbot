@@ -12,13 +12,16 @@
     "zip": "node scripts/check-api-url.mjs && wxt prepare && tsc --noEmit && wxt zip",
     "icons": "node scripts/make-icons.mjs"
   },
-  "dependencies": {},
+  "dependencies": {
+    "drizzle-orm": "0.45.4",
+    "zod": "4.6.7"
+  },
   "devDependencies": {
     "@types/chrome": "^0.0.280",
     "eslint": "^9",
     "linkedom": "^0.18.0",
     "typescript": "^5",
-    "vitest": "^2.0.0",
-    "wxt": "^0.18.0"
+    "vitest": "^5.1.0",
+    "wxt": "^0.21.5"
   }
 }

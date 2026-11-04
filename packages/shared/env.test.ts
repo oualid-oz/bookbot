@@ -35,7 +35,7 @@ describe('checkEnv', () => {
     expect(checkEnv('worker', { ...base, FILE_STORAGE: 'r2', R2_BUCKET_NAME: 'b' }).errors).toEqual([
       'R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY are required for FILE_STORAGE=r2',
     ]);
-    expect(checkEnv('worker', { ...base, FILE_STORAGE: 'ftp' }).errors).toEqual(['FILE_STORAGE must be local, r2, or s3 (got "ftp")']);
+    expect(checkEnv('worker', { ...base, FILE_STORAGE: 'ftp' }).errors).toEqual(['FILE_STORAGE must be local, vercel-blob, r2, or s3 (got "ftp")']);
   });
 
   it('treats billing as all or nothing', () => {
@@ -62,6 +62,7 @@ describe('storage detection', () => {
     expect(checkEnv('worker', { ...base, R2_ACCOUNT_ID: 'a', R2_BUCKET_NAME: 'b' }).errors).toEqual([
       'R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY are required for FILE_STORAGE=r2',
     ]);
-    expect(checkEnv('worker', { ...base, VERCEL: '1' }).errors).toContain('Vercel needs R2 or S3 storage: set the R2_* (or S3_*) variables');
+    expect(checkEnv('worker', { ...base, VERCEL: '1' }).errors).toContain('Vercel needs file storage: connect a Vercel Blob store to the project');
+    expect(checkEnv('worker', { ...base, VERCEL: '1', BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_x' }).errors).toEqual([]);
   });
 });
