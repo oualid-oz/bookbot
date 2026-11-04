@@ -3,7 +3,7 @@
 Bookbot runs as two services that share Postgres, Redis, and file storage:
 
 - **web**: the Next.js app and API (`apps/web/Dockerfile`)
-- **worker**: renders PDF exports from the Redis queue (`apps/worker/Dockerfile`)
+- **worker**: renders PDF exports from the Redis queue (`Dockerfile` at the repo root)
 
 `docker-compose.yml` runs the whole stack, including database migrations.
 

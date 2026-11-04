@@ -1,4 +1,6 @@
-# Build from the repo root:  docker build -f apps/worker/Dockerfile -t bookbot-worker .
+# The export worker (apps/worker). It lives at the repo root because it needs the whole
+# monorepo as build context, and Vercel builds a container from its Dockerfile's folder.
+# Build:                     docker build -t bookbot-worker .
 # Also runs migrations:      docker run --rm -e DATABASE_URL=... bookbot-worker npm run db:migrate
 FROM node:22-alpine
 WORKDIR /app
