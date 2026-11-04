@@ -6,6 +6,7 @@ import { EXPORT_QUEUE, coverDesignSchema, exportSpecSchema, interiorSettingsSche
 import { getStorage } from '@bookbot/storage';
 import { renderCover, type CoverImageFile } from '../render/cover';
 import { renderInterior, type PuzzleContent } from '../render/interior';
+import { trimImage } from '../render/trim';
 
 // BullMQ workers use blocking commands, which require maxRetriesPerRequest: null
 export const connection = new Redis(process.env.REDIS_URL!, { maxRetriesPerRequest: null });
@@ -105,12 +106,18 @@ export async function processExport(job: Job<ExportJobData>) {
           .from(assets)
           .where(and(eq(assets.id, imageId), eq(assets.orgId, project.orgId), eq(assets.status, 'ready')))
       : [];
-    const imageBytes = imageRow?.mimeType ? await getStorage().get(imageRow.r2Key) : null;
+    let imageBytes = imageRow?.mimeType ? await getStorage().get(imageRow.r2Key) : null;
+    let imageType = imageRow?.mimeType ?? null;
+    if (imageBytes && settings.success && settings.data.decor.imageMode === 'frame') {
+      // Frame art often has empty space around it; trim it so the art itself fills the frame
+      const trimmed = await trimImage(imageBytes);
+      if (trimmed) [imageBytes, imageType] = [trimmed, 'image/png'];
+    }
 
     pdf = await renderInterior({
       settings: settings.success ? settings.data : undefined,
       paper: project.paper,
-      decorImage: imageBytes && imageRow?.mimeType ? { bytes: imageBytes, mimeType: imageRow.mimeType } : undefined,
+      decorImage: imageBytes && imageType ? { bytes: imageBytes, mimeType: imageType } : undefined,
       title,
       subtitle: listing?.subtitle,
       projectType: project.type,

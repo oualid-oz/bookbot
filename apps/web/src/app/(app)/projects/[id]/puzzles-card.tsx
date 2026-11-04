@@ -66,7 +66,7 @@ function parseClues(text: string) {
     .map((m) => ({ answer: m[1], clue: m[2] }));
 }
 
-export function PuzzlesCard({ projectId, highlighted }: { projectId: string; highlighted: boolean }) {
+export function PuzzlesCard({ projectId, highlighted, onChange }: { projectId: string; highlighted: boolean; onChange?: () => void }) {
   const [puzzles, setPuzzles] = useState<Puzzle[]>([]);
   const [type, setType] = useState<FormType>('word_search_theme');
   const [themes, setThemes] = useState<Theme[]>([]);
@@ -127,6 +127,7 @@ export function PuzzlesCard({ projectId, highlighted }: { projectId: string; hig
       } else {
         toast.success(added.length === 1 ? 'Puzzle added' : `${added.length} puzzles added`);
       }
+      onChange?.();
     } catch (err) {
       setError(err instanceof ApiError ? (err.fields.words?.[0] ?? err.fields.entries?.[0] ?? err.message) : 'Could not add puzzle');
     } finally {
@@ -138,6 +139,7 @@ export function PuzzlesCard({ projectId, highlighted }: { projectId: string; hig
     try {
       await apiFetch(`/api/projects/${projectId}/puzzles/${puzzleId}`, { method: 'DELETE' });
       setPuzzles((p) => p.filter((x) => x.id !== puzzleId));
+      onChange?.();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not delete puzzle');
     }

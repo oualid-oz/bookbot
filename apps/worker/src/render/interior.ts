@@ -133,8 +133,11 @@ export async function renderInterior(input: InteriorInput): Promise<Uint8Array> 
   const settings = interiorSettingsSchema.parse(input.settings ?? {});
   if (settings.largePrint) layout.scale = 1.4;
 
-  drawTitlePage(layout, input);
-  addPage(layout, false); // blank verso so content starts on a right-hand page
+  if (settings.titlePage) {
+    drawTitlePage(layout, input);
+    addPage(layout, false); // blank verso so content starts on a right-hand page
+  }
+  const titleSpread = doc.getPageCount();
 
   // Headings name the type only when the book mixes puzzle types
   const mixed = new Set(input.puzzles.map((p) => p.type)).size > 1;
@@ -161,14 +164,14 @@ export async function renderInterior(input: InteriorInput): Promise<Uint8Array> 
     drawTemplatePage(layout, addPage(layout, decorateFiller), contentBox(layout, pageIndex), template, settings.lineSpacing);
   }
 
-  // Page numbers on everything after the title spread
+  // Page numbers on everything after the title spread (if there is one)
   doc.getPages().forEach((page, index) => {
-    if (index < 2) return;
+    if (index < titleSpread) return;
     const label = String(index + 1);
     const size = 9 * layout.scale;
     page.drawText(label, {
       x: (layout.width - layout.regular.widthOfTextAtSize(label, size)) / 2,
-      y: inches(BOTTOM_MARGIN) / 2,
+      y: pageNumberY(layout, index),
       size,
       font: layout.regular,
       color: GREY,
@@ -318,18 +321,28 @@ function contentBox(layout: Layout, pageIndex: number) {
   const isRightHand = pageIndex % 2 === 0;
   let left = isRightHand ? layout.inside : inches(OUTSIDE_MARGIN);
   let right = isRightHand ? inches(OUTSIDE_MARGIN) : layout.inside;
+  let top = layout.height - inches(TOP_MARGIN);
+  let bottom = inches(BOTTOM_MARGIN);
   if (layout.framed) {
-    // Keep content inside the border, with some room to breathe
+    // Keep content inside the border or frame artwork, with the chosen room around it
     const frame = frameRect(layout, pageIndex);
-    left = Math.max(left, frame.x + FRAME_PADDING);
-    right = Math.max(right, layout.width - frame.x - frame.width + FRAME_PADDING);
+    const pad = FRAME_PADDING[layout.decor.framePadding];
+    left = Math.max(left, frame.x + pad);
+    right = Math.max(right, layout.width - frame.x - frame.width + pad);
+    top = Math.min(top, frame.y + frame.height - pad);
+    // Leave room for the page number above the bottom of the frame
+    bottom = Math.max(bottom, pageNumberY(layout, pageIndex) + 18 * layout.scale);
   }
-  return {
-    x: left,
-    width: layout.width - left - right,
-    top: layout.height - inches(TOP_MARGIN),
-    bottom: inches(BOTTOM_MARGIN),
-  };
+  return { x: left, width: layout.width - left - right, top, bottom };
+}
+
+/** Baseline of the page number: inside the frame when there is one */
+function pageNumberY(layout: Layout, pageIndex: number) {
+  // 0.5" from the bottom edge, or higher when a frame needs more room
+  const base = inches(0.5);
+  if (!layout.framed) return base;
+  const frame = frameRect(layout, pageIndex);
+  return Math.max(base, frame.y + FRAME_PADDING[layout.decor.framePadding] * 0.75);
 }
 
 function drawCentered(
@@ -347,13 +360,44 @@ function drawCentered(
   page.drawText(safe, { x: box.x + (box.width - font.widthOfTextAtSize(safe, size)) / 2, y, size, font, color });
 }
 
+/**
+ * Wrap text to the box, shrinking it until it fits in `maxLines`, so long
+ * titles never run past the margins
+ */
+function fitLines(font: PDFFont, text: string, maxSize: number, minSize: number, width: number, maxLines: number) {
+  const safe = safeText(font, text);
+  let size = maxSize;
+  let lines = wrapText(font, safe, size, width);
+  while (size > minSize && (lines.length > maxLines || lines.some((l) => font.widthOfTextAtSize(l, size) > width))) {
+    size -= 1;
+    lines = wrapText(font, safe, size, width);
+  }
+  return { lines, size };
+}
+
 function drawTitlePage(layout: Layout, input: InteriorInput) {
   const page = addPage(layout);
   const box = contentBox(layout, 0);
-  const middle = layout.height * 0.6;
-  drawCentered(page, layout, input.title, middle, layout.heading, 28, box, layout.headingColor);
-  if (input.subtitle) {
-    drawCentered(page, layout, input.subtitle, middle - 32, layout.regular, 14, box, layout.headingColor);
+  const title = fitLines(layout.heading, input.title, 28, 16, box.width, 3);
+  const subtitle = input.subtitle ? fitLines(layout.regular, input.subtitle, 14, 9, box.width, 5) : null;
+
+  const titleLead = title.size * 1.25;
+  const subtitleLead = subtitle ? subtitle.size * 1.35 : 0;
+  const gap = 14;
+  // Title and subtitle as one block, centered a little above the middle
+  const blockHeight = title.lines.length * titleLead + (subtitle ? gap + subtitle.lines.length * subtitleLead : 0);
+  let top = layout.height * 0.58 + blockHeight / 2;
+
+  const drawLines = (lines: string[], font: PDFFont, size: number, lead: number) => {
+    for (const line of lines) {
+      top -= lead;
+      page.drawText(line, { x: box.x + (box.width - font.widthOfTextAtSize(line, size)) / 2, y: top, size, font, color: layout.headingColor });
+    }
+  };
+  drawLines(title.lines, layout.heading, title.size, titleLead);
+  if (subtitle) {
+    top -= gap;
+    drawLines(subtitle.lines, layout.regular, subtitle.size, subtitleLead);
   }
 }
 
