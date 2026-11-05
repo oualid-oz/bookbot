@@ -7,4 +7,6 @@ export const EXPORT_QUEUE = 'exports';
  */
 export interface ExportJobData {
   exportId: string;
+  /** Where the web app keeps files; the worker must write to the same place */
+  storage?: string;
 }

@@ -1,9 +1,9 @@
-import { Worker, Job } from 'bullmq';
+import { Worker, Job, UnrecoverableError } from 'bullmq';
 import Redis from 'ioredis';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { assets, db, exports, listings, projectDocs, projects, puzzleSets } from '@bookbot/db';
 import { EXPORT_QUEUE, coverDesignSchema, exportSpecSchema, interiorSettingsSchema, type ExportJobData } from '@bookbot/shared';
-import { getStorage } from '@bookbot/storage';
+import { getStorage, storageDriver } from '@bookbot/storage';
 import { renderCover, type CoverImageFile } from '../render/cover';
 import { renderInterior, type PuzzleContent } from '../render/interior';
 import { trimImage } from '../render/trim';
@@ -13,6 +13,16 @@ export const connection = new Redis(process.env.REDIS_URL!, { maxRetriesPerReque
 
 export async function processExport(job: Job<ExportJobData>) {
   const { exportId } = job.data;
+
+  // A PDF saved anywhere else would be "completed" but impossible to download
+  const storage = storageDriver();
+  if (job.data.storage && job.data.storage !== storage) {
+    throw new UnrecoverableError(
+      job.data.storage === 'vercel-blob'
+        ? 'The worker has no access to Vercel Blob: add BLOB_READ_WRITE_TOKEN to the worker service'
+        : `The worker stores files in "${storage}" but the web app uses "${job.data.storage}"`
+    );
+  }
 
   const [row] = await db
     .select({ export: exports, project: projects })
@@ -143,12 +153,13 @@ export const exportWorker = new Worker<ExportJobData>(EXPORT_QUEUE, processExpor
   concurrency: 2,
 });
 
-// Only mark the export failed once BullMQ has no retries left
+// Mark the export failed once BullMQ has no retries left, or right away for
+// errors that retrying can't fix
 exportWorker.on('failed', async (job, error) => {
   if (!job) return;
   const attempts = job.opts.attempts ?? 1;
   console.error(`Export ${job.data.exportId} attempt ${job.attemptsMade}/${attempts} failed:`, error.message);
-  if (job.attemptsMade >= attempts) {
+  if (job.attemptsMade >= attempts || error instanceof UnrecoverableError || error.name === 'UnrecoverableError') {
     await db
       .update(exports)
       .set({ status: 'failed', errorMessage: error.message.slice(0, 1000), updatedAt: new Date() })

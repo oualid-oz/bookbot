@@ -103,10 +103,13 @@ export function ExportsCard({ projectId, onChange }: { projectId: string; onChan
                 <TableRow key={row.id}>
                   <TableCell className="capitalize">{row.spec?.kind ?? 'interior'}</TableCell>
                   <TableCell>
-                    <Badge variant={STATUS_VARIANT[row.status]} title={row.errorMessage ?? undefined}>
+                    <Badge variant={STATUS_VARIANT[row.status]}>
                       {(row.status === 'pending' || row.status === 'processing') && <Loader2Icon className="animate-spin" />}
                       {row.status}
                     </Badge>
+                    {row.status === 'failed' && row.errorMessage && (
+                      <p className="mt-1 max-w-xs text-xs whitespace-normal text-destructive">{row.errorMessage}</p>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{new Date(row.createdAt).toLocaleString()}</TableCell>
                   <TableCell className="text-right">

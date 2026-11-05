@@ -1,6 +1,6 @@
 import sharp, { type Metadata } from 'sharp';
-import { and, eq, inArray } from 'drizzle-orm';
-import { db, assets } from '@bookbot/db';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { db, assets, projectDocs, projects } from '@bookbot/db';
 import { MAX_IMAGE_BYTES } from '@bookbot/shared';
 import { getStorage, storageDriver } from '@bookbot/storage';
 import { errorResponse, isUuid, requireOrgAccess } from './org-access';
@@ -101,6 +101,46 @@ export async function completeAsset(asset: Asset): Promise<{ ok: true; asset: As
     .where(eq(assets.id, asset.id))
     .returning();
   return { ok: true, asset: ready };
+}
+
+/** Image IDs a saved cover design or interior settings document uses */
+export function imageIdsInDoc(jsonState: unknown): string[] {
+  const doc = (jsonState ?? {}) as { frontImageId?: unknown; backImageId?: unknown; decor?: { imageId?: unknown } };
+  return [doc.frontImageId, doc.backImageId, doc.decor?.imageId].filter((id): id is string => typeof id === 'string');
+}
+
+/**
+ * Delete images (database row and stored file) that no cover design or
+ * interior in the organization uses any more. Call after a design stops using
+ * them: removed, replaced, or its project deleted. Images still used
+ * elsewhere are kept.
+ */
+export async function deleteUnusedImages(orgId: string, ids: string[]) {
+  const candidates = [...new Set(ids)].filter(isUuid);
+  if (!candidates.length) return;
+
+  const docs = await db
+    .select({ jsonState: projectDocs.jsonState })
+    .from(projectDocs)
+    .innerJoin(projects, eq(projects.id, projectDocs.projectId))
+    .where(
+      and(
+        eq(projects.orgId, orgId),
+        sql`(${projectDocs.jsonState}->>'frontImageId' in ${candidates}
+          or ${projectDocs.jsonState}->>'backImageId' in ${candidates}
+          or ${projectDocs.jsonState}->'decor'->>'imageId' in ${candidates})`
+      )
+    );
+  const stillUsed = new Set(docs.flatMap((d) => imageIdsInDoc(d.jsonState)));
+  const unused = candidates.filter((id) => !stillUsed.has(id));
+  if (!unused.length) return;
+
+  const removed = await db
+    .delete(assets)
+    .where(and(eq(assets.orgId, orgId), inArray(assets.id, unused)))
+    .returning({ key: assets.r2Key });
+  // Rows are gone first, so a failed file delete leaves no broken reference
+  await Promise.allSettled(removed.map((r) => getStorage().delete(r.key)));
 }
 
 export async function deleteAsset(asset: Asset) {
