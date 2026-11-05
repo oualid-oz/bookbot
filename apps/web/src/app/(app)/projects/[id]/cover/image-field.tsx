@@ -33,7 +33,13 @@ async function uploadImage(file: File): Promise<UploadedImage> {
   if (upload.kind === 'vercel-blob') {
     // Loaded only when the app stores files in Vercel Blob
     const { upload: blobUpload } = await import('@vercel/blob/client');
-    await blobUpload(upload.pathname, file, { access: 'private', handleUploadUrl: upload.handleUploadUrl, contentType: file.type });
+    await blobUpload(upload.pathname, file, {
+      access: 'private',
+      handleUploadUrl: upload.handleUploadUrl,
+      contentType: file.type,
+      // Big files go up in parallel parts, which is much faster than one request
+      multipart: file.size > 8 * 1024 * 1024,
+    });
   } else {
     const put = await fetch(upload.url, { method: upload.method, headers: upload.headers, body: file });
     if (!put.ok) throw new Error('Upload failed');

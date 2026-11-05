@@ -68,12 +68,26 @@ function uploadInstructions(key: string, id: string, contentType: string) {
  * Check the uploaded bytes are really a PNG or JPEG of sane size, then mark
  * the asset ready. Invalid uploads are deleted.
  */
+/** How much of an upload to read when checking it */
+const HEADER_BYTES = 256 * 1024;
+
+async function readMetadata(bytes: Uint8Array): Promise<Metadata | null> {
+  try {
+    const metadata = await sharp(bytes).metadata();
+    return metadata.width && metadata.height ? metadata : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function completeAsset(asset: Asset): Promise<{ ok: true; asset: Asset } | { ok: false; status: number; error: string }> {
   if (asset.status === 'ready') return { ok: true, asset };
 
   const storage = getStorage();
-  const bytes = await storage.get(asset.r2Key);
-  if (!bytes) return { ok: false, status: 409, error: 'Upload not found; upload the file first' };
+  // An image's type and size are in its first bytes: read only those, not the
+  // whole file (which could be 25 MB coming back from Vercel Blob)
+  const start = await storage.readStart(asset.r2Key, HEADER_BYTES);
+  if (!start) return { ok: false, status: 409, error: 'Upload not found; upload the file first' };
 
   const reject = async (error: string) => {
     await storage.delete(asset.r2Key);
@@ -81,14 +95,15 @@ export async function completeAsset(asset: Asset): Promise<{ ok: true; asset: As
     return { ok: false as const, status: 400, error };
   };
 
-  if (bytes.length > MAX_IMAGE_BYTES) return reject('Images can be at most 25 MB');
+  if (start.size > MAX_IMAGE_BYTES) return reject('Images can be at most 25 MB');
 
-  let metadata: Metadata;
-  try {
-    metadata = await sharp(bytes).metadata();
-  } catch {
-    return reject('File is not a readable image');
+  let metadata = await readMetadata(start.bytes);
+  if (!metadata && start.size > start.bytes.length) {
+    // Rare: the header is further in (e.g. a large embedded color profile)
+    const bytes = await storage.get(asset.r2Key);
+    metadata = bytes ? await readMetadata(bytes) : null;
   }
+  if (!metadata) return reject('File is not a readable image');
   const mimeType = metadata.format === 'png' ? 'image/png' : metadata.format === 'jpeg' ? 'image/jpeg' : null;
   if (!mimeType) return reject('Use a PNG or JPEG image');
   if (!metadata.width || !metadata.height || Math.max(metadata.width, metadata.height) > MAX_IMAGE_SIDE) {
@@ -97,7 +112,7 @@ export async function completeAsset(asset: Asset): Promise<{ ok: true; asset: As
 
   const [ready] = await db
     .update(assets)
-    .set({ status: 'ready', mimeType, width: metadata.width, height: metadata.height, size: bytes.length })
+    .set({ status: 'ready', mimeType, width: metadata.width, height: metadata.height, size: start.size })
     .where(eq(assets.id, asset.id))
     .returning();
   return { ok: true, asset: ready };
