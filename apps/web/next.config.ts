@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
   // Font files are read from disk by /fonts/[file], so tracing can't find them
   outputFileTracingIncludes: {
     "/fonts/[file]": ["../../packages/fonts/files/*.ttf"],
+    // Exports rendered in the web app (Vercel) embed these fonts
+    "/api/export": ["../../packages/fonts/files/*.ttf"],
   },
   /* config options here */
   experimental: {
@@ -24,7 +26,7 @@ const nextConfig: NextConfig = {
       },
     },
   },
-  transpilePackages: ['@bookbot/db', '@bookbot/core', '@bookbot/fonts', '@bookbot/puzzles', '@bookbot/shared', '@bookbot/storage'],
+  transpilePackages: ['@bookbot/db', '@bookbot/core', '@bookbot/exporter', '@bookbot/fonts', '@bookbot/puzzles', '@bookbot/shared', '@bookbot/storage'],
   // Queue client stays a plain Node dependency rather than being bundled
   serverExternalPackages: ['bullmq'],
   // The cover editor moved into each project
