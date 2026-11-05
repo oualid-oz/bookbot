@@ -1,6 +1,6 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { del as blobDel, get as blobGet, put as blobPut } from '@vercel/blob';
+import { BlobNotFoundError, del as blobDel, get as blobGet, head as blobHead, put as blobPut } from '@vercel/blob';
 
 /**
  * File storage used by the web app and the worker.
@@ -20,6 +20,34 @@ export interface Storage {
   get(key: string): Promise<Uint8Array | null>;
   /** No error if the file doesn't exist */
   delete(key: string): Promise<void>;
+  /**
+   * The first `maxBytes` of a file and its full size, without transferring the
+   * rest (enough to read an image's type and dimensions). Null when missing.
+   */
+  readStart(key: string, maxBytes: number): Promise<{ bytes: Uint8Array; size: number } | null>;
+}
+
+/** Read a stream until `maxBytes`, then stop the transfer */
+async function readUpTo(stream: ReadableStream<Uint8Array>, maxBytes: number): Promise<Uint8Array> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  while (length < maxBytes) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    length += value.length;
+  }
+  await reader.cancel().catch(() => {});
+  const bytes = new Uint8Array(Math.min(length, maxBytes));
+  let offset = 0;
+  for (const chunk of chunks) {
+    const part = chunk.subarray(0, bytes.length - offset);
+    bytes.set(part, offset);
+    offset += part.length;
+    if (offset >= bytes.length) break;
+  }
+  return bytes;
 }
 
 export type StorageDriver = 'local' | 'vercel-blob';
@@ -53,6 +81,23 @@ export function createLocalStorage(rootDir: string): Storage {
     async delete(key) {
       await rm(resolveKey(key), { force: true });
     },
+    async readStart(key, maxBytes) {
+      let file;
+      try {
+        file = await open(resolveKey(key), 'r');
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+        throw err;
+      }
+      try {
+        const { size } = await file.stat();
+        const buffer = new Uint8Array(Math.min(size, maxBytes));
+        const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
+        return { bytes: buffer.subarray(0, bytesRead), size };
+      } finally {
+        await file.close();
+      }
+    },
   };
 }
 
@@ -74,6 +119,19 @@ export function createVercelBlobStorage(token = process.env.BLOB_READ_WRITE_TOKE
     },
     async delete(key) {
       await blobDel(key, { token });
+    },
+    async readStart(key, maxBytes) {
+      let size: number;
+      try {
+        ({ size } = await blobHead(key, { token }));
+      } catch (err) {
+        if (err instanceof BlobNotFoundError) return null;
+        throw err;
+      }
+      // Ask for just the start; if the range is ignored, stop reading early anyway
+      const result = await blobGet(key, { access: 'private', token, useCache: false, headers: { Range: `bytes=0-${maxBytes - 1}` } });
+      if (!result?.stream) return null;
+      return { bytes: await readUpTo(result.stream, maxBytes), size };
     },
   };
 }

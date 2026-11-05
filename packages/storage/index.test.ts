@@ -24,6 +24,16 @@ describe('createLocalStorage', async () => {
     await expect(storage.get('exports/../../outside.pdf')).rejects.toThrow('Invalid storage key');
   });
 
+  it('should read just the start of a file, with its full size', async () => {
+    const body = new Uint8Array(1000).map((_, i) => i % 256);
+    await storage.put('assets/big.png', body, 'image/png');
+    const start = await storage.readStart('assets/big.png', 100);
+    expect(start?.size).toBe(1000);
+    expect(start?.bytes).toEqual(body.subarray(0, 100));
+    expect((await storage.readStart('assets/big.png', 5000))?.bytes).toEqual(body);
+    expect(await storage.readStart('assets/missing.png', 100)).toBeNull();
+  });
+
   it('should delete objects, ignoring missing ones', async () => {
     await storage.put('assets/a.png', new Uint8Array([1]), 'image/png');
     await storage.delete('assets/a.png');

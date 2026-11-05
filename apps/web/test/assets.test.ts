@@ -215,3 +215,22 @@ describe('removing images', () => {
     expect(await exists(shared)).toEqual({ row: true, file: true });
   });
 });
+
+describe('image previews', () => {
+  it('serves big images as a screen-sized preview, keeping the original for print', async () => {
+    signInAs(alice);
+    const big = new Uint8Array(await sharp({ create: { width: 3000, height: 4500, channels: 4, background: { r: 10, g: 120, b: 90, alpha: 0.5 } } }).png().toBuffer());
+    const { id, res } = await uploadImage(big);
+    expect(res.status).toBe(200);
+    expect((await json<{ asset: { width: number; height: number } }>(res)).asset).toMatchObject({ width: 3000, height: 4500 });
+
+    const preview = await assetContent(request('/x'), params({ id }));
+    expect(preview.headers.get('content-type')).toBe('image/webp');
+    const meta = await sharp(Buffer.from(await preview.arrayBuffer())).metadata();
+    expect([meta.width, meta.height, meta.hasAlpha]).toEqual([1365, 2048, true]);
+
+    // Small images are sent untouched
+    const { id: smallId } = await uploadImage(png);
+    expect((await assetContent(request('/x'), params({ id: smallId }))).headers.get('content-type')).toBe('image/png');
+  });
+});
