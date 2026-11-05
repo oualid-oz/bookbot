@@ -59,6 +59,10 @@ Run them before starting a new version. Compose does this automatically. They ar
 
 Both Docker images define a `HEALTHCHECK` that uses these endpoints.
 
+## Exports on Vercel
+
+On Vercel there is no separate worker: the web app renders each PDF right after answering the export request (Next.js `after()`, up to 5 minutes per export), so `vercel.json` only deploys the web app. Elsewhere (Docker Compose), the web app queues exports in Redis and the worker renders them. Set `EXPORT_MODE=inline` or `EXPORT_MODE=queue` to choose explicitly. Exports still pending after 15 minutes are marked failed so they can be retried.
+
 ## File storage on Vercel (Vercel Blob)
 
 In the Vercel dashboard, open **Storage → Create → Blob** and connect the store to the project. Vercel then adds `BLOB_READ_WRITE_TOKEN` to the project's environment variables, and Bookbot uses Blob automatically; nothing else to set. Files are stored **private**: exports and images are only served through Bookbot's API to signed-in users. Browsers upload images straight to Blob (with a short-lived token from `/api/assets/blob-upload`), so uploads aren't limited by Vercel's 4.5 MB request size.

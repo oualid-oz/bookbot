@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { and, count, desc, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, lt, sql } from 'drizzle-orm';
 import { db, exports, listings, projectDocs, projects, puzzleSets } from '@bookbot/db';
 import {
   generateCrossword,
@@ -347,7 +347,22 @@ export async function deletePuzzle(projectId: string, puzzleId: string) {
 
 // ---- Exports ----
 
+/** Exports still pending after this long were lost (e.g. no worker running) */
+const STALE_EXPORT_MS = 15 * 60 * 1000;
+
 export async function listExports(projectId: string) {
+  // Let the user retry instead of waiting on an export that will never finish
+  await db
+    .update(exports)
+    .set({ status: 'failed', errorMessage: 'This export never started. Please export again.', updatedAt: new Date() })
+    .where(
+      and(
+        eq(exports.projectId, projectId),
+        inArray(exports.status, ['pending', 'processing']),
+        lt(exports.createdAt, new Date(Date.now() - STALE_EXPORT_MS))
+      )
+    );
+
   const rows = await db
     .select()
     .from(exports)

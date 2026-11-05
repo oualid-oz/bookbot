@@ -9,6 +9,8 @@ import { GET as getExport, POST as createExport } from '@/app/api/export/route';
 import { GET as download } from '@/app/api/export/[id]/download/route';
 import { POST as keywordLookup } from '@/app/api/research/keyword/route';
 import { addExportJob } from '@/server/queue';
+import { exportMode } from '@/server/export-runner';
+import { GET as listProjectExports } from '@/app/api/projects/[id]/exports/route';
 import { createUser, json, params, queuedExports, request, resetDatabase, signInAs, type TestUser } from './helpers';
 
 let alice: TestUser;
@@ -130,5 +132,30 @@ describe('keyword lookup limits', () => {
     const blocked = await lookup('brand new keyword');
     expect(blocked.status).toBe(429);
     expect(await json(blocked)).toMatchObject({ limit: 20, used: 20 });
+  });
+});
+
+describe('export mode', () => {
+  it('renders in the web app on Vercel and queues for the worker elsewhere, unless EXPORT_MODE says', () => {
+    expect(exportMode({ VERCEL: '1' })).toBe('inline');
+    expect(exportMode({})).toBe('queue');
+    expect(exportMode({ VERCEL: '1', EXPORT_MODE: 'queue' })).toBe('queue');
+    expect(exportMode({ EXPORT_MODE: 'inline' })).toBe('inline');
+  });
+});
+
+describe('stale exports', () => {
+  it('marks exports that never started as failed after 15 minutes, so they can be retried', async () => {
+    const user = await createUser('Stale');
+    signInAs(user);
+    const [project] = await db.insert(projects).values({ orgId: user.orgId, type: 'book', trimSize: '6x9', pageCount: 24 }).returning();
+    const old = new Date(Date.now() - 20 * 60 * 1000);
+    const [stuck] = await db.insert(exports).values({ projectId: project.id, status: 'pending', spec: {}, createdAt: old }).returning();
+    const [fresh] = await db.insert(exports).values({ projectId: project.id, status: 'pending', spec: {} }).returning();
+
+    const res = await listProjectExports(request('/x'), params({ id: project.id }));
+    const { exports: rows } = await json<{ exports: { id: string; status: string; errorMessage: string | null }[] }>(res);
+    expect(rows.find((r) => r.id === stuck.id)).toMatchObject({ status: 'failed', errorMessage: 'This export never started. Please export again.' });
+    expect(rows.find((r) => r.id === fresh.id)?.status).toBe('pending');
   });
 });

@@ -5,6 +5,7 @@ COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
+COPY packages/exporter/package.json packages/exporter/
 COPY packages/fonts/package.json packages/fonts/
 COPY packages/puzzles/package.json packages/puzzles/
 COPY packages/shared/package.json packages/shared/

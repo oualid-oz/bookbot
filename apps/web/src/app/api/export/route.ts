@@ -4,7 +4,10 @@ import { db, exports, projects } from '@bookbot/db';
 import { exportRequestSchema } from '@bookbot/shared';
 import { consumeUsage, releaseUsage } from '@/lib/entitlements';
 import { errorResponse, isUuid, readJson, requireOrgAccess, requireUser } from '@/server/org-access';
-import { addExportJob } from '@/server/queue';
+import { startExport } from '@/server/export-runner';
+
+// Exports rendered in this app (Vercel) finish after the response, within this limit
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   const parsed = exportRequestSchema.safeParse(await readJson(req));
@@ -45,7 +48,7 @@ export async function POST(req: NextRequest) {
       .returning({ id: exports.id });
     exportId = exportRecord.id;
 
-    await addExportJob(exportId);
+    await startExport(exportId);
   } catch (err) {
     console.error(`Failed to create export${exportId ? ` ${exportId}` : ''}:`, err);
     // Nothing was queued: give the reserved export back
