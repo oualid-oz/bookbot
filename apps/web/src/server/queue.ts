@@ -1,6 +1,7 @@
 import { Queue } from 'bullmq';
 import Redis from 'ioredis';
 import { EXPORT_QUEUE, type ExportJobData } from '@bookbot/shared';
+import { storageDriver } from '@bookbot/storage';
 
 let exportQueue: Queue<ExportJobData> | undefined;
 let lastErrorLog = 0;
@@ -44,7 +45,7 @@ export async function addExportJob(exportId: string): Promise<void> {
     timer = setTimeout(() => reject(new Error('Timed out connecting to the export queue')), QUEUE_TIMEOUT_MS);
   });
   try {
-    await Promise.race([getExportQueue().add('export', { exportId }, { jobId: exportId }), timeout]);
+    await Promise.race([getExportQueue().add('export', { exportId, storage: storageDriver() }, { jobId: exportId }), timeout]);
   } finally {
     clearTimeout(timer);
   }

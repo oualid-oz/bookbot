@@ -24,6 +24,7 @@ import {
 import type { z } from 'zod';
 import { errorResponse, isUuid, requireOrgAccess, type OrgAccess } from './org-access';
 import { deleteStoredFiles } from './stored-files';
+import { deleteUnusedImages, imageIdsInDoc } from './assets';
 
 type Project = typeof projects.$inferSelect;
 type Listing = typeof listings.$inferSelect;
@@ -145,8 +146,11 @@ export async function updateProject(
 
 export async function deleteProject(projectId: string) {
   const files = await db.select({ key: exports.r2Key }).from(exports).where(eq(exports.projectId, projectId));
+  const [cover, interior] = await Promise.all([previousImages(projectId, 'cover'), previousImages(projectId, 'interior')]);
   await db.delete(projects).where(eq(projects.id, projectId));
   await deleteStoredFiles(files.map((f) => f.key));
+  // Its images too, unless another project uses them
+  await deleteDroppedImages(projectId, { orgId: cover.orgId, ids: [...cover.ids, ...interior.ids] }, []);
 }
 
 // ---- Cover design ----
@@ -171,6 +175,7 @@ export async function getCoverDesign({ project, listing }: ProjectAccess): Promi
 }
 
 export async function saveCoverDesign(projectId: string, design: CoverDesign) {
+  const before = await previousImages(projectId, 'cover');
   const [doc] = await db
     .insert(projectDocs)
     .values({ projectId, kind: 'cover', jsonState: design, version: 1 })
@@ -181,7 +186,26 @@ export async function saveCoverDesign(projectId: string, design: CoverDesign) {
     .returning({ version: projectDocs.version, updatedAt: projectDocs.updatedAt });
 
   await db.update(projects).set({ updatedAt: new Date() }).where(eq(projects.id, projectId));
+  await deleteDroppedImages(projectId, before, imageIdsInDoc(design));
   return doc;
+}
+
+/** The project's org and the images its saved document uses, before a save */
+async function previousImages(projectId: string, kind: 'cover' | 'interior') {
+  const [row] = await db
+    .select({ orgId: projects.orgId, jsonState: projectDocs.jsonState })
+    .from(projects)
+    .leftJoin(projectDocs, and(eq(projectDocs.projectId, projects.id), eq(projectDocs.kind, kind)))
+    .where(eq(projects.id, projectId));
+  return { orgId: row?.orgId ?? null, ids: imageIdsInDoc(row?.jsonState) };
+}
+
+/** Delete images a save stopped using, unless something else still uses them */
+async function deleteDroppedImages(projectId: string, before: { orgId: string | null; ids: string[] }, after: string[]) {
+  const dropped = before.ids.filter((id) => !after.includes(id));
+  if (before.orgId && dropped.length) {
+    await deleteUnusedImages(before.orgId, dropped).catch((err) => console.error(`Could not clean up images of project ${projectId}:`, err));
+  }
 }
 
 // ---- Interior settings ----
@@ -197,6 +221,7 @@ export async function getInteriorSettings(projectId: string): Promise<InteriorSe
 }
 
 export async function saveInteriorSettings(projectId: string, settings: InteriorSettings) {
+  const before = await previousImages(projectId, 'interior');
   await db
     .insert(projectDocs)
     .values({ projectId, kind: 'interior', jsonState: settings, version: 1 })
@@ -205,6 +230,7 @@ export async function saveInteriorSettings(projectId: string, settings: Interior
       set: { jsonState: settings, version: sql`${projectDocs.version} + 1`, updatedAt: new Date() },
     });
   await db.update(projects).set({ updatedAt: new Date() }).where(eq(projects.id, projectId));
+  await deleteDroppedImages(projectId, before, imageIdsInDoc(settings));
 }
 
 // ---- Puzzles ----

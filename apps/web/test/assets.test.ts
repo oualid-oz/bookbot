@@ -12,6 +12,8 @@ import { PUT as uploadAsset } from '@/app/api/assets/[id]/upload/route';
 import { POST as completeAsset } from '@/app/api/assets/[id]/complete/route';
 import { GET as assetContent } from '@/app/api/assets/[id]/content/route';
 import { GET as getCover, PUT as saveCover } from '@/app/api/projects/[id]/cover/route';
+import { PUT as saveInterior } from '@/app/api/projects/[id]/interior/route';
+import { DELETE as deleteProject } from '@/app/api/projects/[id]/route';
 import { createUser, json, params, request, resetDatabase, signInAs, type TestUser } from './helpers';
 
 let alice: TestUser;
@@ -140,5 +142,76 @@ describe('cover images', () => {
     const cover = await json<{ design: { frontImageId: string }; images: { id: string; width: number }[] }>(await getCover(request('/x'), ctx));
     expect(cover.design.frontImageId).toBe(mine);
     expect(cover.images).toEqual([expect.objectContaining({ id: mine, width: 64 })]);
+  });
+});
+
+describe('removing images', () => {
+  const newProject = async () =>
+    (await db.insert(projects).values({ orgId: alice.orgId, type: 'book', trimSize: '6x9', pageCount: 100 }).returning())[0];
+  const coverOf = (projectId: string) => (design: Record<string, unknown>) =>
+    saveCover(request('/x', { method: 'PUT', body: design }), params({ id: projectId }));
+
+  /** Whether the image still exists, in the database and in storage */
+  async function exists(id: string) {
+    const [row] = await db.select().from(assets).where(eq(assets.id, id));
+    return { row: !!row, file: row ? (await getStorage().get(row.r2Key)) !== null : false };
+  }
+  const fileOf = async (id: string) => (await db.select().from(assets).where(eq(assets.id, id)))[0].r2Key;
+
+  it('deletes an image (row and file) when it is removed or replaced on the cover', async () => {
+    signInAs(alice);
+    const project = await newProject();
+    const save = coverOf(project.id);
+    const { id: first } = await uploadImage(png);
+    const { id: second } = await uploadImage(png);
+    const firstKey = await fileOf(first);
+
+    expect((await save({ frontImageId: first })).status).toBe(200);
+    // Replaced: the first image goes
+    expect((await save({ frontImageId: second })).status).toBe(200);
+    expect(await exists(first)).toEqual({ row: false, file: false });
+    expect(await getStorage().get(firstKey)).toBeNull();
+    // Removed: the second one goes too
+    expect((await save({ frontImageId: null })).status).toBe(200);
+    expect(await exists(second)).toEqual({ row: false, file: false });
+  });
+
+  it('keeps an image another design still uses', async () => {
+    signInAs(alice);
+    const a = await newProject();
+    const b = await newProject();
+    const { id: shared } = await uploadImage(png);
+    await coverOf(a.id)({ frontImageId: shared });
+    await coverOf(b.id)({ backImageId: shared });
+
+    await coverOf(a.id)({ frontImageId: null });
+    expect(await exists(shared)).toEqual({ row: true, file: true });
+    // Moving it from front to back on the same cover keeps it too
+    await coverOf(b.id)({ frontImageId: shared, backImageId: null });
+    expect(await exists(shared)).toEqual({ row: true, file: true });
+  });
+
+  it('deletes an interior frame image when it is removed', async () => {
+    signInAs(alice);
+    const project = await newProject();
+    const { id: frame } = await uploadImage(png);
+    const save = (decor: Record<string, unknown>) => saveInterior(request('/x', { method: 'PUT', body: { decor } }), params({ id: project.id }));
+    expect((await save({ imageId: frame })).status).toBe(200);
+    expect((await save({ border: 'line' })).status).toBe(200);
+    expect(await exists(frame)).toEqual({ row: false, file: false });
+  });
+
+  it("deletes a project's images with the project, unless another project uses them", async () => {
+    signInAs(alice);
+    const doomed = await newProject();
+    const other = await newProject();
+    const { id: only } = await uploadImage(png);
+    const { id: shared } = await uploadImage(png);
+    await coverOf(doomed.id)({ frontImageId: only, backImageId: shared });
+    await coverOf(other.id)({ frontImageId: shared });
+
+    expect((await deleteProject(request('/x', { method: 'DELETE' }), params({ id: doomed.id }))).status).toBe(204);
+    expect(await exists(only)).toEqual({ row: false, file: false });
+    expect(await exists(shared)).toEqual({ row: true, file: true });
   });
 });
