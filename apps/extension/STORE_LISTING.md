@@ -27,7 +27,7 @@ To change the icon, edit the SVG in `scripts/make-icons.mjs` and run `npm run ic
 >
 > • Sales estimates on search results: every book with a Best Sellers Rank gets an estimate of its daily and monthly sales.
 > • Book details at a glance: on a book's page, see its rank, category, price, reviews and estimated sales in one panel.
-> • Save books to Bookbot: track books you want to study, then research their niche and keywords in your Bookbot workspace.
+> • Save books to Bookbot: keep a list of books you want to study in your Bookbot workspace.
 >
 > Works on Amazon.com, .co.uk, .de, .fr, .es, .it and .co.jp.
 >
@@ -75,7 +75,7 @@ Then confirm all three certifications: data isn't sold, isn't used for unrelated
 - [ ] The web app is live at the address used in `WXT_API_URL`, and `/privacy` loads without signing in
 - [ ] `NEXT_PUBLIC_SUPPORT_EMAIL` is set on the live site
 - [ ] Screenshots are taken from the real extension
-- [ ] You tested the zip: in `chrome://extensions`, turn on Developer mode, drag in the zip (or "Load unpacked" with `.output/chrome-mv3`), add a token, then open an Amazon search
+- [ ] You tested the zip: in `chrome://extensions`, turn on Developer mode, click "Load unpacked" and choose `.output/chrome-mv3` (or the unzipped zip), add a token, then open an Amazon search
 - [ ] Developer account registered (a one-time fee) and contact email verified
 
 ## A note on the name

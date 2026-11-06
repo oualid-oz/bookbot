@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { bookSnapshots, db, trackedBooks } from '@bookbot/db';
 import { POST as saveBook } from '@/app/api/ext/books/route';
 import { GET as listBooks } from '@/app/api/books/route';
-import { DELETE as deleteBook } from '@/app/api/books/[id]/route';
+import { DELETE as deleteBook, PATCH as updateBook } from '@/app/api/books/[id]/route';
 import { POST as createToken } from '@/app/api/extension/tokens/route';
 import { DELETE as revokeToken } from '@/app/api/extension/tokens/[id]/route';
 import { getRedis } from '@/server/redis';
@@ -109,5 +109,43 @@ describe('saved books', () => {
     expect((await save(aliceToken, book)).status).toBe(401);
     signInAs(null);
     expect((await listBooks(request('/api/books'))).status).toBe(401);
+  });
+});
+
+describe('notes and tags', () => {
+  const patch = (id: string, body: unknown) => updateBook(request('/x', { method: 'PATCH', body }), params({ id }));
+  const notesBook = { ...book, asin: 'B000NOTES1', title: 'Notes book' };
+
+  it('saves notes and tags, tidies tags, and keeps them when the book is saved again', async () => {
+    // An earlier test revokes Alice's first token
+    const { token } = await tokenFor(alice);
+    expect((await save(token, notesBook)).status).toBeLessThan(300);
+    const saved = (await booksOf(alice)).find((b) => b.asin === notesBook.asin)!;
+    expect(saved).toMatchObject({ notes: '', tags: [] });
+
+    signInAs(alice);
+    const res = await patch(saved.id, { notes: '  Great cover  ', tags: ['Winter', 'winter', ' competitor '] });
+    expect(res.status).toBe(200);
+    expect((await json<{ book: Book }>(res)).book).toMatchObject({ notes: 'Great cover', tags: ['winter', 'competitor'] });
+
+    await save(token, { ...notesBook, bsr: 42 });
+    expect((await booksOf(alice)).find((b) => b.asin === notesBook.asin)).toMatchObject({ bsr: 42, notes: 'Great cover', tags: ['winter', 'competitor'] });
+
+    // Changing only one keeps the other
+    signInAs(alice);
+    await patch(saved.id, { notes: 'Changed' });
+    expect((await booksOf(alice)).find((b) => b.asin === notesBook.asin)).toMatchObject({ notes: 'Changed', tags: ['winter', 'competitor'] });
+  });
+
+  it("validates input and can't reach another org's book", async () => {
+    const saved = (await booksOf(alice)).find((b) => b.asin === notesBook.asin)!;
+    signInAs(alice);
+    expect((await patch(saved.id, { tags: Array.from({ length: 11 }, (_, i) => `t${i}`) })).status).toBe(400);
+    expect((await patch(saved.id, { notes: 'x'.repeat(2001) })).status).toBe(400);
+    expect((await patch('not-a-uuid', { notes: 'x' })).status).toBe(404);
+    signInAs(bob);
+    expect((await patch(saved.id, { notes: 'hacked' })).status).toBe(404);
+    signInAs(null);
+    expect((await patch(saved.id, { notes: 'x' })).status).toBe(401);
   });
 });

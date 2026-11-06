@@ -24,9 +24,8 @@ describe('org access', () => {
 
   it("uses the user's own org when no orgId is sent", async () => {
     signInAs(alice);
-    const res = await lookup({ keyword: 'journals' });
-    expect(res.status).toBe(200);
-    expect((await json(res)).cached).toBe(false);
+    // Past the access check; keyword data itself isn't available yet
+    expect((await lookup({ keyword: 'journals' })).status).toBe(503);
   });
 
   it("hides other orgs: 404, not 403", async () => {

@@ -1,4 +1,4 @@
-const DEFAULT_PAGE = '/research';
+const DEFAULT_PAGE = '/home';
 
 /**
  * Where to go after signing in or up: the page from ?callbackUrl= if it is on

@@ -9,6 +9,8 @@ import { DELETE as deletePuzzle } from '@/app/api/projects/[id]/puzzles/[puzzleI
 import { GET as getInterior, PUT as saveInterior } from '@/app/api/projects/[id]/interior/route';
 import { GET as getListing, PUT as saveListing } from '@/app/api/projects/[id]/listing/route';
 import { GET as getProgress } from '@/app/api/projects/[id]/progress/route';
+import { GET as getHome } from '@/app/api/home/route';
+import { buildSteps, completion, nextStep } from '@/components/project-steps';
 import { createUser, json, params, request, resetDatabase, signInAs, type TestUser } from './helpers';
 
 let alice: TestUser;
@@ -384,5 +386,63 @@ describe('progress', () => {
   it("hides other organizations' projects", async () => {
     signInAs(bob);
     expect((await getProgress(request('/x'), params({ id: projectId }))).status).toBe(404);
+  });
+});
+
+describe('home', () => {
+  type Home = {
+    projects: { project: { id: string }; progress: { puzzles: number } }[];
+    exports: { id: string; kind: string; downloadUrl: string }[];
+    plan: string;
+    usage: { exportsPerMonth: { limit: number }; projects: { used: number; limit: number } };
+    savedBooks: number;
+  };
+
+  it('starts empty for a new account', async () => {
+    const user = await createUser('Newcomer');
+    signInAs(user);
+    expect(await json(await getHome())).toMatchObject({ projects: [], exports: [], plan: 'free', savedBooks: 0, usage: { projects: { used: 0, limit: 3 } } });
+  });
+
+  it('shows the latest books with progress, finished exports only, and only your own', async () => {
+    const user = await createUser('Author');
+    signInAs(user);
+    const add = (title: string, minutesAgo: number) =>
+      db.insert(projects).values({ orgId: user.orgId, type: 'puzzle_book', trimSize: '6x9', pageCount: 24, updatedAt: new Date(Date.now() - minutesAgo * 60_000) }).returning();
+    const [oldest] = await add('oldest', 40);
+    const [third] = await add('third', 30);
+    const [second] = await add('second', 20);
+    const [newest] = await add('newest', 10);
+    await db.insert(puzzleSets).values({ projectId: newest.id, type: 'sudoku', seed: 's', params: {}, content: {} });
+    const [done] = await db.insert(exports).values({ projectId: newest.id, status: 'completed', r2Key: 'x.pdf', spec: { kind: 'cover' }, completedAt: new Date() }).returning();
+    await db.insert(exports).values({ projectId: newest.id, status: 'failed', spec: {} });
+
+    const home = await json<Home>(await getHome());
+    expect(home.projects.map((p) => p.project.id)).toEqual([newest.id, second.id, third.id]);
+    expect(home.projects.map((p) => p.project.id)).not.toContain(oldest.id);
+    expect(home.projects[0].progress.puzzles).toBe(1);
+    expect(home.exports).toEqual([expect.objectContaining({ id: done.id, kind: 'cover', downloadUrl: `/api/export/${done.id}/download` })]);
+    expect(home.usage.projects.used).toBe(4);
+
+    signInAs(await createUser('Someone else'));
+    expect(await json<Home>(await getHome())).toMatchObject({ projects: [], exports: [] });
+    signInAs(null);
+    expect((await getHome()).status).toBe(401);
+  });
+});
+
+describe('project steps', () => {
+  const base = { puzzles: 0, interiorSaved: false, coverSaved: false, listingErrors: 0, listingWarnings: 0, interiorExported: false, coverExported: false };
+
+  it('points at the next step, and only puzzle books require puzzles', () => {
+    expect(nextStep(buildSteps({ type: 'puzzle_book' }, base))?.id).toBe('puzzles');
+    expect(nextStep(buildSteps({ type: 'journal' }, base))?.id).toBe('interior');
+    expect(nextStep(buildSteps({ type: 'journal' }, { ...base, interiorSaved: true, coverSaved: true, listingErrors: 2 }))).toMatchObject({ id: 'listing', hint: '2 to fix' });
+  });
+
+  it('counts a finished book as 100% with nothing left to do', () => {
+    const steps = buildSteps({ type: 'book' }, { ...base, interiorSaved: true, coverSaved: true, interiorExported: true, coverExported: true });
+    expect(nextStep(steps)).toBeNull();
+    expect(completion(steps)).toBe(100);
   });
 });

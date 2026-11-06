@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { notFound, useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircle2Icon, CircleAlertIcon, CircleIcon, Trash2Icon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -19,28 +19,16 @@ import {
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { apiFetch } from '@/lib/api-client';
+import { ApiError, apiFetch } from '@/lib/api-client';
 import { PROJECT_TYPE_LABELS, TRIM_OPTIONS, type ProjectSummary } from '@/components/project-options';
+import { STEP_IDS, buildSteps, type ProjectProgress, type ProjectStep, type StepId } from '@/components/project-steps';
 import { CoverStep } from './cover/cover-step';
 import { DetailsCard } from './details-card';
 import { ExportsCard } from './exports-card';
 import { InteriorCard } from './interior-card';
 import { ListingStep } from './listing/listing-step';
-import { ProjectStepper, type WizardStep } from './project-stepper';
+import { ProjectStepper } from './project-stepper';
 import { PuzzlesCard } from './puzzles-card';
-
-interface Progress {
-  puzzles: number;
-  interiorSaved: boolean;
-  coverSaved: boolean;
-  listingErrors: number;
-  listingWarnings: number;
-  interiorExported: boolean;
-  coverExported: boolean;
-}
-
-const STEP_IDS = ['details', 'puzzles', 'interior', 'cover', 'listing', 'export'] as const;
-type StepId = (typeof STEP_IDS)[number];
 
 const STEP_INTROS: Record<StepId, string> = {
   details: 'Title, trim size, page count and paper.',
@@ -51,46 +39,19 @@ const STEP_INTROS: Record<StepId, string> = {
   export: 'Make the print-ready PDFs to upload to KDP.',
 };
 
-function buildSteps(project: ProjectSummary, progress: Progress): WizardStep[] {
-  const puzzleBook = project.type === 'puzzle_book';
-  const exportedCount = Number(progress.interiorExported) + Number(progress.coverExported);
-  return [
-    { id: 'details', title: 'Details', status: 'done' },
-    {
-      id: 'puzzles',
-      title: 'Puzzles',
-      status: progress.puzzles > 0 ? 'done' : puzzleBook ? 'todo' : 'optional',
-      hint: progress.puzzles > 0 ? `${progress.puzzles} added` : puzzleBook ? undefined : 'Optional',
-    },
-    { id: 'interior', title: 'Interior', status: progress.interiorSaved ? 'done' : 'todo' },
-    { id: 'cover', title: 'Cover', status: progress.coverSaved ? 'done' : 'todo' },
-    {
-      id: 'listing',
-      title: 'Listing',
-      status: progress.listingErrors > 0 ? 'warning' : 'done',
-      hint: progress.listingErrors > 0 ? `${progress.listingErrors} to fix` : undefined,
-    },
-    {
-      id: 'export',
-      title: 'Export',
-      status: exportedCount === 2 ? 'done' : 'todo',
-      hint: exportedCount === 1 ? '1 of 2 files' : undefined,
-    },
-  ];
-}
-
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [project, setProject] = useState<ProjectSummary | null>(null);
-  const [progress, setProgress] = useState<Progress | null>(null);
+  const [progress, setProgress] = useState<ProjectProgress | null>(null);
   const [error, setError] = useState('');
+  const [missing, setMissing] = useState(false);
   // Steps stay mounted once opened, so unsaved edits survive moving between them
   const [visited, setVisited] = useState<Set<StepId>>(new Set());
 
   const loadProgress = useCallback(() => {
-    apiFetch<Progress>(`/api/projects/${id}/progress`)
+    apiFetch<ProjectProgress>(`/api/projects/${id}/progress`)
       .then(setProgress)
       .catch(() => {});
   }, [id]);
@@ -98,7 +59,11 @@ export default function ProjectPage() {
   useEffect(() => {
     apiFetch<{ project: ProjectSummary }>(`/api/projects/${id}`)
       .then((data) => setProject(data.project))
-      .catch((err) => setError(err.message));
+      .catch((err) => {
+        // Deleted, another account's, or not a project ID at all
+        if (err instanceof ApiError && (err.status === 404 || err.status === 400)) setMissing(true);
+        else setError(err.message);
+      });
     loadProgress();
   }, [id, loadProgress]);
 
@@ -129,6 +94,7 @@ export default function ProjectPage() {
     }
   };
 
+  if (missing) notFound();
   if (error) {
     return <p className="mx-auto w-full max-w-6xl text-sm text-destructive">{error}</p>;
   }
@@ -233,7 +199,7 @@ export default function ProjectPage() {
 }
 
 /** What's left before uploading to KDP, linking back to each step */
-function PublishChecklist({ steps, onSelect }: { steps: WizardStep[]; onSelect: (index: number) => void }) {
+function PublishChecklist({ steps, onSelect }: { steps: ProjectStep[]; onSelect: (index: number) => void }) {
   const items = steps.slice(0, -1).map((step, index) => ({ step, index }));
   const open = items.filter(({ step }) => step.status === 'todo' || step.status === 'warning');
 

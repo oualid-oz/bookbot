@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from 'cn';
+import { CategoryInput } from './category-input';
 import { apiFetch } from '@/lib/api-client';
 
 type Listing = Required<ListingUpdate>;
@@ -244,14 +245,15 @@ export function ListingStep({ projectId: id, onSaved }: { projectId: string; onS
           <CardHeader>
             <CardTitle>Categories</CardTitle>
             <CardDescription>
-              Up to three. Note the paths you choose in KDP&apos;s category picker here so you can find them again.
+              Up to three. Search our list or type your own, then pick the closest match in KDP&apos;s category picker, which has the final say.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {CATEGORY_SLOTS.map((i) => (
-              <Input key={i} aria-label={`Category ${i + 1}`} value={listing.categories[i]} maxLength={200}
-                placeholder={i === 0 ? 'e.g. Games & Activities › Puzzles & Word Games › Word Search' : ''}
-                onChange={(e) => setSlot('categories', i, e.target.value)} />
+              <CategoryInput key={i} label={`Category ${i + 1}`} value={listing.categories[i]}
+                exclude={listing.categories.filter((c, j) => j !== i && c.trim())}
+                placeholder={i === 0 ? 'Search, e.g. word search or journal' : ''}
+                onChange={(value) => setSlot('categories', i, value)} />
             ))}
             <Issues issues={issuesFor('categories')} />
           </CardContent>

@@ -10,6 +10,7 @@ import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { apiFetch } from '@/lib/api-client';
+import { DownloadCard } from './download-card';
 
 interface Token {
   id: string;
@@ -72,6 +73,8 @@ export default function ExtensionSettingsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Chrome extension</h1>
         <p className="text-muted-foreground">Connect the Bookbot extension to see sales estimates on Amazon.</p>
       </div>
+
+      <DownloadCard />
 
       <Card>
         <CardHeader>

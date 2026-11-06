@@ -4,7 +4,7 @@
     "web": {
       "root": "apps/web",
       "framework": "nextjs",
-      "buildCommand": "npm run migrate:vercel --prefix ../../packages/db && npm run build"
+      "buildCommand": "npm run migrate:vercel --prefix ../../packages/db && npm run package:web --prefix ../extension && npm run build"
     }
   },
   "rewrites": [

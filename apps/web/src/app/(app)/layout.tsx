@@ -9,7 +9,6 @@ import { AppSidebar } from '@/components/app-sidebar';
 import { ModeToggle } from '@/components/mode-toggle';
 import { NavUser, NavUserSkeleton } from '@/components/nav-user';
 import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 
 export default function AppLayout({ children }: LayoutProps<'/'>) {
@@ -38,20 +37,10 @@ export default function AppLayout({ children }: LayoutProps<'/'>) {
           <Suspense fallback={null}>
             <EmailVerificationNotice />
           </Suspense>
-          {/* Pages on dynamic routes read their params at request time */}
-          <Suspense fallback={<PageSkeleton />}>{children}</Suspense>
+          {children}
         </div>
       </SidebarInset>
     </SidebarProvider>
-  );
-}
-
-function PageSkeleton() {
-  return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <Skeleton className="h-10 w-64" />
-      <Skeleton className="h-64 rounded-xl" />
-    </div>
   );
 }
 

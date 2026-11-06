@@ -29,7 +29,6 @@ export default function PricingPage() {
           const features = [
             `${formatLimit(limits.exportsPerMonth)} exports / month`,
             `${formatLimit(limits.aiCredits)} AI credits`,
-            `${formatLimit(limits.keywordLookupsPerDay)} keyword lookups / day`,
             `${formatLimit(limits.projects)} projects`,
           ];
 

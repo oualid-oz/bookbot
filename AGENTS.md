@@ -50,7 +50,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ### API Endpoints
 - `/api/auth/[...nextauth]` - NextAuth
-- `/api/research/keyword` - Keyword lookup with cache
+- `/api/research/keyword` - Keyword lookup; returns 503 until a real data provider is connected
 - `/api/research/niche` - Niche analysis
 - `/api/ext/estimate` - Extension BSR estimation
 - `/api/extension/token` - Generate extension tokens
