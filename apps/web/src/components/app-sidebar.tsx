@@ -5,6 +5,7 @@ import { Suspense } from "react"
 import Image from "next/image"
 import Link from "next/link"
 
+import logo from "../../public/icon-192.png"
 import { appNavGroups, appNavSecondary } from "@/components/app-nav"
 import { NavMain, NavMainList } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
@@ -35,7 +36,8 @@ export function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <Link href="/home">
-                <Image src="/icon-192.png" alt="" width={32} height={32} className="size-8 shrink-0 rounded-lg" priority />
+                {/* Served as a static file: no image optimizer needed for a small icon */}
+                <Image src={logo} alt="" width={32} height={32} className="size-8 shrink-0 rounded-lg" unoptimized priority />
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">Bookbot</span>
                   <span className="truncate text-xs">KDP toolkit</span>

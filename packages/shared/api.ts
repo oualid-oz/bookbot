@@ -74,3 +74,15 @@ export const saveBookSchema = z.object({
 });
 
 export type SaveBookInput = z.infer<typeof saveBookSchema>;
+
+/** The user's own notes and tags on a saved book */
+export const bookNotesSchema = z.object({
+  notes: z.string().trim().max(2000, 'Notes can be at most 2000 characters').optional(),
+  tags: z
+    .array(z.string().trim().toLowerCase().min(1).max(30, 'Tags can be at most 30 characters'))
+    .max(10, 'Use at most 10 tags')
+    .transform((tags) => [...new Set(tags)])
+    .optional(),
+});
+
+export type BookNotesInput = z.infer<typeof bookNotesSchema>;

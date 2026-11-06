@@ -64,6 +64,13 @@
       "when": 1793533601965,
       "tag": "0008_listing_author_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793980922634,
+      "tag": "0009_book_notes_tags",
+      "breakpoints": true
     }
   ]
 }

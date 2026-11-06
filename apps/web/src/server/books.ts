@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { bookSnapshots, db, trackedBooks } from '@bookbot/db';
 import { estimateSalesFromBSR, getBSRCurve } from '@bookbot/core';
-import type { SaveBookInput } from '@bookbot/shared';
+import type { BookNotesInput, SaveBookInput } from '@bookbot/shared';
 
 /** Saves this close together update the latest snapshot instead of adding one */
 const SNAPSHOT_MERGE_WINDOW_MS = 10 * 60 * 1000;
@@ -81,6 +81,8 @@ function serializeBook(book: Book) {
     reviews: book.reviews,
     estimatedDailySales: book.estimatedDailySales,
     estimatedMonthlySales: book.estimatedDailySales === null ? null : book.estimatedDailySales * 30,
+    notes: book.notes,
+    tags: book.tags as string[],
     url: `https://${AMAZON_HOSTS[book.marketplace]}/dp/${book.asin}`,
     lastCheckedAt: book.lastCheckedAt,
     createdAt: book.createdAt,
@@ -108,6 +110,16 @@ export async function listBooks(orgId: string) {
       .reverse()
       .map(({ bsr, capturedAt }) => ({ bsr, capturedAt })),
   }));
+}
+
+/** Update the user's notes and tags; null when the book isn't in the org */
+export async function updateBookNotes(orgId: string, bookId: string, changes: BookNotesInput) {
+  const [book] = await db
+    .update(trackedBooks)
+    .set(changes)
+    .where(and(eq(trackedBooks.id, bookId), eq(trackedBooks.orgId, orgId)))
+    .returning();
+  return book ? serializeBook(book) : null;
 }
 
 export async function deleteBook(orgId: string, bookId: string): Promise<boolean> {

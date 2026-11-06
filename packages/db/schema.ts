@@ -428,6 +428,9 @@ export const trackedBooks = pgTable('tracked_books', {
   price: decimal('price', { precision: 10, scale: 2 }),
   reviews: integer('reviews'),
   estimatedDailySales: integer('estimated_daily_sales'),
+  // The user's own notes on the book; saving it again from Amazon keeps them
+  notes: text('notes').notNull().default(''),
+  tags: jsonb('tags').notNull().default([]),
   lastCheckedAt: timestamp('last_checked_at', { withTimezone: true }).defaultNow().notNull(),
   createdAt: timestamp('createdAt', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
