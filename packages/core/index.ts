@@ -7,3 +7,4 @@ export * from './listing';
 export * from './cover';
 export * from './usage';
 export * from './decorations';
+export * from './cover-convert';

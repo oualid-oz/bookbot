@@ -1,4 +1,4 @@
-import { BookmarkIcon, CreditCardIcon, HomeIcon, LibraryBigIcon, PlugIcon, UserRoundIcon, type LucideIcon } from "lucide-react"
+import { BookmarkIcon, CreditCardIcon, HomeIcon, LibraryBigIcon, PlugIcon, ScalingIcon, UserRoundIcon, type LucideIcon } from "lucide-react"
 
 export interface AppNavItem {
   title: string
@@ -17,7 +17,13 @@ export interface AppNavGroup {
 export const appNavGroups: AppNavGroup[] = [
   { items: [{ title: "Home", url: "/home", icon: HomeIcon }] },
   { label: "Research", items: [{ title: "Saved books", url: "/research", icon: BookmarkIcon }] },
-  { label: "Create", items: [{ title: "Projects", url: "/projects", icon: LibraryBigIcon }] },
+  {
+    label: "Create",
+    items: [
+      { title: "Projects", url: "/projects", icon: LibraryBigIcon },
+      { title: "Cover converter", url: "/cover-converter", icon: ScalingIcon },
+    ],
+  },
 ]
 
 export const appNavMain: AppNavItem[] = appNavGroups.flatMap((group) => group.items)
