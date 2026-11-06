@@ -27,7 +27,7 @@ To change the icon, edit the SVG in `scripts/make-icons.mjs` and run `npm run ic
 >
 > • Sales estimates on search results: every book with a Best Sellers Rank gets an estimate of its daily and monthly sales.
 > • Book details at a glance: on a book's page, see its rank, category, price, reviews and estimated sales in one panel.
-> • Save books to Bookbot: track books you want to study, then research their niche and keywords in your Bookbot workspace.
+> • Save books to Bookbot: keep a list of books you want to study in your Bookbot workspace.
 >
 > Works on Amazon.com, .co.uk, .de, .fr, .es, .it and .co.jp.
 >

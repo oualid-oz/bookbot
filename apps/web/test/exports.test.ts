@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
-import { db, entitlementsUsage, exports, projects } from '@bookbot/db';
+import { db, entitlementsUsage, exports, keywordCache, projects } from '@bookbot/db';
 import { getStorage } from '@bookbot/storage';
 import { GET as getExport, POST as createExport } from '@/app/api/export/route';
 import { GET as download } from '@/app/api/export/[id]/download/route';
@@ -115,23 +115,23 @@ describe('export status and download', () => {
   });
 });
 
-describe('keyword lookup limits', () => {
-  it('caps concurrent lookups at the daily limit, but cached results stay free', async () => {
+describe('keyword lookups', () => {
+  it('never returns made-up numbers, even for cached rows, and uses up no lookups', async () => {
     signInAs(alice);
-    const lookup = (keyword: string) => keywordLookup(request('/x', { method: 'POST', body: { keyword } }));
-    const results = await Promise.all(Array.from({ length: 30 }, (_, i) => lookup(`keyword ${i}`)));
-    const ok = results.filter((r) => r.status === 200).length;
-    expect(ok).toBe(20);
-    expect(await usage('keywordLookupsPerDay')).toBe(20);
-
-    const cached = results.findIndex((r) => r.status === 200);
-    const again = await lookup(`keyword ${cached}`);
-    expect(again.status).toBe(200);
-    expect((await json(again)).cached).toBe(true);
-
-    const blocked = await lookup('brand new keyword');
-    expect(blocked.status).toBe(429);
-    expect(await json(blocked)).toMatchObject({ limit: 20, used: 20 });
+    await db.insert(keywordCache).values({
+      orgId: alice.orgId,
+      keyword: 'old fake result',
+      volume: 1234,
+      competition: '0.5',
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    const before = await usage('keywordLookupsPerDay');
+    for (const keyword of ['old fake result', 'brand new keyword']) {
+      const res = await keywordLookup(request('/x', { method: 'POST', body: { keyword } }));
+      expect(res.status).toBe(503);
+      expect(await json(res)).toEqual({ error: 'Keyword data is not available yet' });
+    }
+    expect(await usage('keywordLookupsPerDay')).toBe(before);
   });
 });
 

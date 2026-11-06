@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const FEATURES = [
-  { icon: SearchIcon, title: 'Niche research', description: 'Keyword volume, competition, and BSR-based sales estimates.' },
+  { icon: SearchIcon, title: 'Book research', description: 'Sales estimates from Best Sellers Rank, right on Amazon, and a list of books to study.' },
   { icon: PaletteIcon, title: 'Cover studio', description: 'Full wrap-around covers sized to KDP trim, bleed, and spine.' },
   { icon: PuzzleIcon, title: 'Puzzle books', description: 'Generate reproducible word search puzzles from a seed.' },
 ];
@@ -18,7 +18,7 @@ export default function HomePage() {
         </div>
         <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">Bookbot</h1>
         <p className="text-lg text-muted-foreground">
-          Research KDP niches, design covers, and generate puzzle books.
+          Research books on Amazon, design covers, and generate puzzle books.
         </p>
         <div className="flex gap-3">
           <Button size="lg" asChild>

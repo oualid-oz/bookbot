@@ -33,7 +33,6 @@ const PLAN_NAMES: Record<Plan, string> = { free: 'Free', pro: 'Pro', enterprise:
 
 const METERS = [
   { key: 'exportsPerMonth', label: 'Exports this month' },
-  { key: 'keywordLookupsPerDay', label: 'Keyword lookups today' },
   { key: 'aiCredits', label: 'AI credits this month' },
   { key: 'projects', label: 'Projects' },
 ] as const;
