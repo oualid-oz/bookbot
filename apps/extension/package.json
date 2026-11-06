@@ -11,7 +11,8 @@
     "typecheck": "wxt prepare && tsc --noEmit",
     "zip": "node --env-file-if-exists=../../.env scripts/check-api-url.mjs && wxt prepare && tsc --noEmit && wxt zip",
     "icons": "node scripts/make-icons.mjs",
-    "dev": "wxt"
+    "dev": "wxt",
+    "package:web": "node scripts/package-for-web.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",

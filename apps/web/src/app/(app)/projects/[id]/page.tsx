@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { notFound, useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeftIcon, ArrowRightIcon, CheckCircle2Icon, CircleAlertIcon, CircleIcon, Trash2Icon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { apiFetch } from '@/lib/api-client';
+import { ApiError, apiFetch } from '@/lib/api-client';
 import { PROJECT_TYPE_LABELS, TRIM_OPTIONS, type ProjectSummary } from '@/components/project-options';
 import { STEP_IDS, buildSteps, type ProjectProgress, type ProjectStep, type StepId } from '@/components/project-steps';
 import { CoverStep } from './cover/cover-step';
@@ -46,6 +46,7 @@ export default function ProjectPage() {
   const [project, setProject] = useState<ProjectSummary | null>(null);
   const [progress, setProgress] = useState<ProjectProgress | null>(null);
   const [error, setError] = useState('');
+  const [missing, setMissing] = useState(false);
   // Steps stay mounted once opened, so unsaved edits survive moving between them
   const [visited, setVisited] = useState<Set<StepId>>(new Set());
 
@@ -58,7 +59,11 @@ export default function ProjectPage() {
   useEffect(() => {
     apiFetch<{ project: ProjectSummary }>(`/api/projects/${id}`)
       .then((data) => setProject(data.project))
-      .catch((err) => setError(err.message));
+      .catch((err) => {
+        // Deleted, another account's, or not a project ID at all
+        if (err instanceof ApiError && (err.status === 404 || err.status === 400)) setMissing(true);
+        else setError(err.message);
+      });
     loadProgress();
   }, [id, loadProgress]);
 
@@ -89,6 +94,7 @@ export default function ProjectPage() {
     }
   };
 
+  if (missing) notFound();
   if (error) {
     return <p className="mx-auto w-full max-w-6xl text-sm text-destructive">{error}</p>;
   }

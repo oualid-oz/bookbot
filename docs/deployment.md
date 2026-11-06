@@ -80,6 +80,10 @@ In the Stripe dashboard (test mode first):
 
 ## Chrome extension
 
+On Vercel, each deployment builds the extension and offers it to signed-in users under **Settings → Extension**, connected to the site's production address (`WXT_API_URL` overrides it). If that build fails, the deployment continues with a warning and the download is hidden. To get the download elsewhere (the web Docker image doesn't build it), run `npm run package:web -w extension` before building the web app.
+
+To build it by hand, for example to publish it:
+
 Build it against your production URL and upload `apps/extension/.output/chrome-mv3`:
 
 ```bash

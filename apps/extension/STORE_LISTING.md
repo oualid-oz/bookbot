@@ -75,7 +75,7 @@ Then confirm all three certifications: data isn't sold, isn't used for unrelated
 - [ ] The web app is live at the address used in `WXT_API_URL`, and `/privacy` loads without signing in
 - [ ] `NEXT_PUBLIC_SUPPORT_EMAIL` is set on the live site
 - [ ] Screenshots are taken from the real extension
-- [ ] You tested the zip: in `chrome://extensions`, turn on Developer mode, drag in the zip (or "Load unpacked" with `.output/chrome-mv3`), add a token, then open an Amazon search
+- [ ] You tested the zip: in `chrome://extensions`, turn on Developer mode, click "Load unpacked" and choose `.output/chrome-mv3` (or the unzipped zip), add a token, then open an Amazon search
 - [ ] Developer account registered (a one-time fee) and contact email verified
 
 ## A note on the name

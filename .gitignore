@@ -42,6 +42,7 @@ apps/worker/dist
 **/.wxt
 apps/extension/dist
 apps/extension/.output
+apps/web/public/downloads
 
 # local storage (exports, uploads)
 .data

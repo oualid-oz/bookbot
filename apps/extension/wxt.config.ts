@@ -22,6 +22,8 @@ console.log(`Bookbot API for this build: ${apiUrl}`);
 
 export default defineConfig({
   srcDir: 'src',
+  // Icons and other static files
+  publicDir: 'src/public',
   // The web app uses 3000
   dev: { server: { port: 3100 } },
   // import.meta.env reads the same file. Only WXT_ and VITE_ variables reach the
