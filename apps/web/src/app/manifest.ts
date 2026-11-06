@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'Bookbot',
     short_name: 'Bookbot',
     description: 'KDP research, design, and puzzle book tools',
-    start_url: '/research',
+    start_url: '/home',
     display: 'standalone',
     background_color: '#ffffff',
     theme_color: '#ffffff',

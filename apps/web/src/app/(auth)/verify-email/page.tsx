@@ -51,7 +51,7 @@ export default function VerifyEmailPage() {
           )}
           {state !== 'verifying' && (
             <Button asChild>
-              <Link href="/research">Continue to Bookbot</Link>
+              <Link href="/home">Continue to Bookbot</Link>
             </Button>
           )}
         </FieldGroup>

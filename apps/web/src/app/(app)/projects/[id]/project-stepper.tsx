@@ -2,16 +2,7 @@
 
 import { CheckIcon } from 'lucide-react';
 import { cn } from 'cn';
-
-export type StepStatus = 'done' | 'todo' | 'warning' | 'optional';
-
-export interface WizardStep {
-  id: string;
-  title: string;
-  status: StepStatus;
-  /** Short state shown under the title, e.g. "12 puzzles" or "2 problems" */
-  hint?: string;
-}
+import type { ProjectStep, StepStatus } from '@/components/project-steps';
 
 const STATUS_LABELS: Record<StepStatus, string> = {
   done: 'done',
@@ -24,7 +15,7 @@ const STATUS_LABELS: Record<StepStatus, string> = {
  * Numbered steps across the top of the project page. Every step can be
  * opened directly; the marker shows its status.
  */
-export function ProjectStepper({ steps, current, onSelect }: { steps: WizardStep[]; current: number; onSelect: (index: number) => void }) {
+export function ProjectStepper({ steps, current, onSelect }: { steps: ProjectStep[]; current: number; onSelect: (index: number) => void }) {
   return (
     <nav aria-label="Book steps">
       <ol className="flex items-start">
