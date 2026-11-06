@@ -39,6 +39,28 @@
     },
     "clean": {
       "cache": false
+    },
+    "extension#build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.env"
+      ],
+      "outputs": [
+        ".output/**"
+      ],
+      "env": [
+        "WXT_API_URL"
+      ]
+    },
+    "extension#dev": {
+      "cache": false,
+      "persistent": true,
+      "passThroughEnv": [
+        "WXT_API_URL"
+      ]
     }
   }
 }

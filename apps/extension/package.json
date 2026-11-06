@@ -1,16 +1,17 @@
 {
   "name": "extension",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "scripts": {
     "build": "wxt prepare && tsc --noEmit && wxt build",
-    "start": "wxt dev",
+    "start": "wxt",
     "lint": "eslint",
     "clean": "rm -rf .wxt dist",
     "test": "wxt prepare && vitest run",
     "typecheck": "wxt prepare && tsc --noEmit",
-    "zip": "node scripts/check-api-url.mjs && wxt prepare && tsc --noEmit && wxt zip",
-    "icons": "node scripts/make-icons.mjs"
+    "zip": "node --env-file-if-exists=../../.env scripts/check-api-url.mjs && wxt prepare && tsc --noEmit && wxt zip",
+    "icons": "node scripts/make-icons.mjs",
+    "dev": "wxt"
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",

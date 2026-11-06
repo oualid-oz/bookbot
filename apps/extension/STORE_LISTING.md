@@ -9,7 +9,7 @@ cd apps/extension
 WXT_API_URL=https://your-bookbot-domain npm run zip
 ```
 
-This creates `.output/extension-<version>-chrome.zip`. Upload that file. The build refuses to run without an `https://` address, so a store build can never point at `localhost`. Raise `version` in `wxt.config.ts` for every new upload.
+This creates `.output/extension-<version>-chrome.zip`. Upload that file. The build refuses to run without an `https://` address, so a store build can never point at `localhost`. Raise `version` in `apps/extension/package.json` for every new upload.
 
 To change the icon, edit the SVG in `scripts/make-icons.mjs` and run `npm run icons`.
 
